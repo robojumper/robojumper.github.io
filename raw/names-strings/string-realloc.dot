@@ -1,0 +1,42 @@
+digraph props {
+    bgcolor="#fffffd";
+    node [shape=record];
+    
+    str [shape = none, style=filled, fillcolor=lightblue, xlabel = "MyString", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p0" border="1">&lt;pointer&gt;</td>
+        <td port="p1" border="1">8</td>
+    </tr></table>>];
+    data [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="el0" border="1">'H'</td>
+        <td border="1">'i'</td>
+        <td border="1">','</td>
+        <td border="1">' '</td>
+        <td border="1">'Ã'</td>
+        <td border="1">'œ'</td>
+        <td border="1">'C'</td>
+        <td border="1">\0</td>
+
+    </tr></table>>];
+
+        str2 [shape = none, style=filled, fillcolor=lightblue, xlabel = "MyString2", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p0" border="1">&lt;pointer&gt;</td>
+        <td port="p1" border="1">3</td>
+    </tr></table>>];
+    data2 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="el0" border="1">'H'</td>
+        <td border="1">'i'</td>
+        <td border="1">\0</td>
+    </tr></table>>];
+
+    { rank = same; str;
+    olddata [shape = none, color=grey, fontcolor=grey, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="el0" border="1">'H'</td>
+        <td border="1">'i'</td>
+        <td border="1">\0</td>
+    </tr></table>>];
+    }
+
+    "str":p0 -> "data":el0;
+    "str":p0 -> "olddata":el0 [style=dashed, color=grey];
+    "str2":p0 -> "data2":el0;
+}

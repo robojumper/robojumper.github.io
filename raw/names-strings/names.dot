@@ -1,0 +1,74 @@
+digraph props {
+    bgcolor="#fffffd";
+	concentrate=true;
+    node [shape=record];
+
+	myname [shape = none, style=filled, fillcolor=lightblue, xlabel = "MyName", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p1" border="1">3</td>
+    </tr></table>>];
+
+	myname2 [shape = none, style=filled, fillcolor=lightblue, xlabel = "MyName2", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p1" border="1">1</td>
+    </tr></table>>];
+
+	hashset [shape = none, style=filled, fillcolor=pink, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+		<td port="p0" border="1">0</td>
+		<td port="p1" border="1">X</td>
+		<td port="p2" border="1">2</td>
+		<td port="p3" border="1">X</td>
+		<td port="p4" border="1">X</td>
+		<td port="p5" border="1">5</td>
+		<td port="p6" border="1">X</td>
+		<td port="p7" border="1">X</td>
+		<td port="p8" border="1">X</td>
+	</tr></table>>];
+	table [shape = none, style=filled, fillcolor=pink, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+		<td port="p0" border="1">0</td>
+		<td port="p1" border="1">1</td>
+		<td port="p2" border="1">2</td>
+		<td port="p3" border="1">3</td>
+		<td port="p4" border="1">...</td>
+	</tr></table>>];
+
+    datNone [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+		<td port="p0" border="1">Index: 0</td>
+		<td port="N" border="1">Next: X</td>
+        <td border="1">"None\0"</td>
+    </tr></table>>];
+
+	datAdv [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+		<td port="p0" border="1">Index: 1</td>
+		<td port="N" border="1">Next: X</td>
+		<td border="1">"Adv\0"</td>
+    </tr></table>>];
+
+	datM1 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+		<td port="p0" border="1">Index: 2</td>
+		<td port="N" border="1">Next: X</td>
+        <td border="1">"M1\0"</td>
+    </tr></table>>];
+
+	datOther [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+		<td port="p0" border="1">Index: 3</td>
+		<td port="N" border="1">Next</td>
+        <td border="1">"Other\0"</td>
+    </tr></table>>];
+
+	datOther:N -> datM1:p0;
+
+	table:p0 -> datNone:p0;
+	table:p1 -> datAdv:p0;
+	table:p2 -> datM1:p0;
+	table:p3 -> datOther:p0;
+
+	datNone:p0 -> table:p0
+	datAdv:p0 -> table:p1
+	datM1:p0 -> table:p2
+	datOther:p0 -> table:p3
+
+	hashset:p0 -> datNone:p0;
+	hashset:p2 -> datAdv:p0;
+	hashset:p5 -> datOther:p0;
+
+	{rank = same; hashset; table;}
+}

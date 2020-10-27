@@ -1,0 +1,31 @@
+cite::before {
+	content: "—";
+}
+
+.markdown-body strong, .markdown-body em {
+	color: var(--color-font);
+}
+
+.interjection {
+	width: 90%;
+	margin: 0 auto;
+	padding: 16px;
+	padding-bottom: 1px;
+	border-radius: 6px;
+}
+
+.info.interjection {
+	background-color: var(--color-codebg);
+}
+
+body[data-theme='dark'] .advice.interjection {
+	background-color: rgb(33, 80, 33);
+}
+
+body[data-theme='auto'] .advice.interjection {
+	background-color: rgb(214, 255, 214);
+}
+
+body[data-theme='light'] .advice.interjection {
+	background-color: rgb(214, 255, 214);
+}
