@@ -122,7 +122,7 @@ In addition to the special name `'None'`, we'll consider the three names from ou
 
 ![name table visualization](/img/names-strings/names.png)
 
-In our example, the names were inserted in the afore-mentioned order. `'None'` has the hash 0, `'Adv'` the hash 2, and `'M1'` and `'Other'` both share the hash 5. When we created the name `Other`, `M1` was already in that bucket, `M1` does not compare equal to `Other`, so we linked `'Other'` to `'M1'` and placed `'M1'` into that bucket.
+In our example, the names were inserted in the afore-mentioned order. `'None'` has the hash 0, `'Adv'` the hash 2, and `'M1'` and `'Other'` both share the hash 5. When we created the name `Other`, `M1` was already in that bucket, `M1` does not compare equal to `Other`, so we linked `'Other'` before `'M1'` and placed `'Other'` into that bucket.
 
 {{< interjection kind="info" >}}
 Names are an Unreal Engine 3 implementation of [string interning](https://en.wikipedia.org/wiki/String_interning): For every string, we only store data once, and can then cheaply create and compare several instances of the string. <p />
@@ -177,7 +177,7 @@ Simply put, a `_Number` suffix is stripped before interning. Our names don't act
 
 Let `'XComLWTuple'` be our sixth name. Then the name `'XComLWTuple'` would be represented as `6|0` (0 for no suffix). `'XComLWTuple_0'` would be represented as `6|1`, `'XComLWTuple_1'` as `6|2`, `'XComLWTuple_345'` as `6|346`.
 
-Our example code managed to trigger this optimization: Our names are `'MySomewhatLongerBaseStringForHigherMemoryUsage_0'`, `'MySomewhatLongerBaseStringForHigherMemoryUsage_1'`, and so on. This means that the game interns the `MySomewhatLongerBaseStringForHigherMemoryUsage'` once and all our synthetic names re-use that index, just with a different number part. Testing two names for equality is thus a matter of comparing two integers.
+Our example code managed to trigger this optimization: Our names are `'MySomewhatLongerBaseStringForHigherMemoryUsage_0'`, `'MySomewhatLongerBaseStringForHigherMemoryUsage_1'`, and so on. This means that the game interns the `MySomewhatLongerBaseStringForHigherMemoryUsage'` once and all our synthetic names re-use that index, just with a different number part. Testing two names for equality is thus a matter of comparing the two integers of the two names.
 
 #### Let's Break It For Real
 
