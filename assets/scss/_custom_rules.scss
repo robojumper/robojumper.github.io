@@ -29,3 +29,7 @@ body[data-theme='auto'] .advice.interjection {
 body[data-theme='light'] .advice.interjection {
 	background-color: rgb(214, 255, 214);
 }
+
+li:target {
+	background-color: var(--color-divider);
+}

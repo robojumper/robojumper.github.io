@@ -71,9 +71,9 @@ digraph props {
                 </table>>];
         }
 
-        unit_1_1 -> unit_2_1;
-        unit_1_2 -> unit_2_2;
-        weapon_1_3 -> weapon_2_3;
-        ability_1_5 -> ability_2_5;
+        unit_1_1 -> unit_2_1 [style=dashed];
+        unit_1_2 -> unit_2_2 [style=dashed];
+        weapon_1_3 -> weapon_2_3 [style=dashed];
+        ability_1_5 -> ability_2_5 [style=dashed];
     }
 }

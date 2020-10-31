@@ -1,7 +1,7 @@
 ---
 title: "History"
 summary: "This article reviews the XCOM 2 implementation of the MVC architecture and investigates some finer details and consequences..."
-date: 2020-10-28T20:34:35+01:00
+date: 2020-10-31T10:00:00+01:00
 draft: true
 tags: ["unrealscript", "xcom2"]
 ---
@@ -37,7 +37,7 @@ animations breaking some rules? Is network replication configured correctly? Do 
 
 {{< interjection kind="info" >}}
 [Replication](https://docs.unrealengine.com/udk/Three/ReplicationHome.html) is the Unreal Engine 3 solution to multiplayer and networking.
-It features a client-server architecture, remote procedure calls, synchronization of variables, lossy data compression, reliable/unreliable data, and much more.
+It features a client-server architecture, remote procedure calls, synchronization of variables, lossy data compression, reliable/unreliable data and much more.
 
 Nobody in the XCOM 2 community knows how it works and the one remnant (UI functions being marked `simulated`) continues to be cargo-culted.
 This is because replication is entirely irrelevant to XCOM 2. I assume it was quite tricky to get right in XCOM EU/EW.
@@ -48,7 +48,8 @@ What these have in common is that systems ostensibly designed for the visual pre
 ![physics and animation on the same rank as gameplay](/img/history/tohuwabohu.png)
 
 We have a hard time enforcing invariants and separation of concerns. Nothing could possibly tell the game engine that physics should
-never move a unit to the adjacent tile when it is idling, or that a unit must successfully land after grappling.
+never move a unit to the adjacent tile when it is idling, or that a unit must successfully land after grappling. Even saving and re-loading
+a save can't fix it: Our unit has permanently fallen off the map!
 
 It would be great if there was an authoritative representation of the tactical board, manipulated only by our own gameplay code. The visual
 presentation would then only read from that representation.
@@ -56,7 +57,7 @@ presentation would then only read from that representation.
 {{< interjection kind="info" >}}
 This problem is often encountered in frontend applications and user interface. Of course, buttons can't fall out
 of the window, but putting our windowing library and GUI toolkit in charge of our business logic can have similarly bad
-side effects -- outdated display, greyed-out buttons that should be enabled, and a lot of shared responsibilities.
+side effects -- outdated display, greyed-out buttons that should be enabled, impossible input, and a lot of shared responsibilities.
 
 It's not surprising that the solution employed in XCOM 2 originated from user interface development, sometime in the 70's.
 {{< /interjection >}}
@@ -70,8 +71,9 @@ It's not surprising that the solution employed in XCOM 2 originated from user in
 * Ensuring that the View has read-only access to the Model and all modifications to the Model are made through the Controller
 
 {{< interjection kind="info" >}}
-Don't attempt to clearly and unambiguously define where exactly the boundary between Model and Controller lies. Everyone and their
-grandmother has their own opinion on that topic. For the purpose of this post, we'll just roll with one particular interpretation -- mine.<p />
+Don't attempt to clearly and unambiguously define where exactly the boundary between Model and Controller lies (or what a Controller actually is).
+Everyone and their grandmother has their own opinion on that topic.
+For the purpose of this post, we'll just roll with one particular interpretation -- mine.<p />
 {{< /interjection >}}
 
 ### Flow of information
@@ -79,7 +81,7 @@ grandmother has their own opinion on that topic. For the purpose of this post, w
 We'll need XCOM 2 terminology here quite a bit, so here's a *very* condensed explanation of the core tactical gameplay systems:
 
 The *History* stores the current state of the battle. The *GameRules* manage the player turns and build a list of *AvailableActions*
-for all *Players*, and the currently active Player gets to submit one of these actions in form of a *Context*.
+for all *Players* and the currently active Player gets to submit one of these actions in form of a *Context*.
 The GameRules evaluate this Context and submit the resulting changes to the History, allowing reaction abilities to trigger,
 giving temporary turns to scampering or reacting units.  
 The *Visualization* independently watches for changes to the History and updates world and pawns.
@@ -110,14 +112,14 @@ That particular page contains some useful code samples for directly interacting 
 We need all sorts of information in our model. Information about units, items, their abilities, applied effects, the state of the mission script, objectives.
 It makes sense to use UnrealScript's inheritance/polymorphism system for this: We create a `class XComGameState_BaseObject extends Object;`. Everything we
 store as part of the model must be a subclass of `XComGameState_BaseObject`. This rules out quite a bit of nonsensical interactions: We can't store `Actors`
-in our History (which would be terrible since they're tied to the world), similarly we can't store `StaticMeshes`. Nice and controlled.
+in our model (which would be terrible since they're tied to the world), similarly we can't store `StaticMeshes`. Nice and controlled.
 
 {{< interjection kind="info" >}}
 In the interest of keeping things succinct, I will abbreviate the `XComGameState_` prefix with `XCGS_`. Instances of `XCGS_` classes are called "state objects".<p />
 {{< /interjection >}}
 
 However, our classes can have arbitrary properties (class variables). Which kinds of these can we save and load? After all, even though we're
-limited to adding state objects to the History, we could simply have a `var StaticMesh EvilProperty;`. What about `var XCGS_BaseObject RefToSelf;`? Or other weird data
+limited to adding state objects to the model, we could simply have a `var StaticMesh EvilProperty;`. What about `var XCGS_BaseObject RefToSelf;`? Or other weird data
 structures that interface closely with the UnrealScript virtual machine?
 
 {{< interjection kind="info" >}}
@@ -129,7 +131,7 @@ Firaxis made the pragmatic decision to simply not support `Object` properties wh
 
 Referring to other state objects objects is a legitimate requirement on the other hand -- without it, we couldn't realize that units
 actually own items and abilities. The solution is quite simple: We give every state object a numeric `ObjectID`. State objects keep
-this ID throughout the entire campaign, and they will not be re-used. The History provides a way to get the state object for a
+this ID throughout the entire campaign and IDs will not be re-used. The model provides a way to get the state object for a
 given ID, so we only need to store the ID when referring to other objects. Firaxis wraps this integer in a single-member struct
 called `StateObjectReference` to neuter all the arithmetic functions useful for integers but entirely pointless for IDs.
 
@@ -145,21 +147,23 @@ object is a state object or has a persistent name (i.e. the function is a static
 
 #### Frames
 
-This simple History model has one problem: Our visualization, generally responsible for visualizing *changes*, can only view the state at one point in time.
+This simple model has one problem: Our visualization, generally responsible for visualizing *changes*, can only view the state at one point in time.
 Worse, if gameplay advances, visualization may miss certain states and instead look at a future state. It is genuinely useful to be able to look at past and future states!
 
 {{< interjection kind="info" >}}
 If a unit was on overwatch in the past state and is now no longer on overwatch, we can show an "Overwatch removed" flyover.  
-If a movement will result in three different other units performing overwatch shots, we can prepare a super cinematic camera movement.<p />
+If a movement will result in three other units performing overwatch shots, we can prepare a super cinematic camera movement.<p />
 {{< /interjection >}}
 
-It makes sense to store our history as an append-only list of states. In order to modify the History,
-we create a new container (`XComGameState`) and clone the objects before adding them to
-the new history frame and modifying them. When it's done, we submit it to the history.
+It makes sense to store our model as an append-only list of state changes. Let's call it the *History*.
+In order to modify the History, we create a new container (`XComGameState`) and clone the objects before adding them to
+this container and modifying them. When it's done, we submit it to the history.
 
 {{< interjection kind="advice" >}}
-We call the `XComGameState` "history frame". Note that history frames and state objects (`XComGameState_BaseObject`, `XComGameState_Unit`) are different.
-To make things more confusing, history frames are sometimes referred to as "game states", and state objects as "states", for example "unit states".<p />
+We call the `XComGameState` "game state". Note that game states and state objects (`XComGameState_BaseObject`, `XComGameState_Unit`) are different.
+To make things more confusing, "state" can refer to game states as well as state objects, for example "unit states".
+
+To disambiguate, game states are sometimes referred to as "history frames".
 {{< /interjection >}}
 
 As an optimization, we only need to clone the objects we are interested in modifying:
@@ -167,7 +171,7 @@ As an optimization, we only need to clone the objects we are interested in modif
 ![visualization of history frames](/img/history/frames.png)
 
 In this example, Unit 2 shot Unit 1 with Item 3 using a free Ability 5. Unit 2 did not change at all, but is still part of the updated state because
-it generally makes sense to have the shooter in the frame. Unit 1 lost health and the Overwatch status, Item 3 used ammo. Unit 4 did not participate
+it generally makes sense to have the shooter in the game state. Unit 1 lost health and the Overwatch status, Item 3 used ammo. Unit 4 did not participate
 in the action at all.
 
 Even though the object names change, the IDs stay the same. The ObjectID can be used to uniquely identify and track all state objects!
@@ -175,13 +179,13 @@ Even though the object names change, the IDs stay the same. The ObjectID can be 
 {{< interjection kind="advice" >}}
 Hold on to and pass around `StateObjectReferences`, not `XCGS_` objects. The more state objects you pass around, the higher the risk of using outdated information.
 
-On the other hand, simply requesting state objects from the history may result in you looking into the future. You can query history frames for state
-objects, and you can ask the History for the state objects at arbitrary history indices. This is especially important for visualization, which may end up
-[spoiling results](#achievements-and-mission-completion) if it doesn't look at state objects from the exact history index as the visualized frame.
+On the other hand, simply requesting state objects from the history may result in you looking into the future. You can query game states for state
+objects and ask the History for the state objects at arbitrary history indices. This is especially important for visualization, which may end up
+[spoiling results](#achievements-and-mission-completion) if it doesn't look at state objects from the exact history index as the visualized game state.
 {{< /interjection >}}
 
-This allows us to answer all kinds of questions and enables as a bonus a History replay feature: We can load a completed tactical
-save in replay mode, and step through the history, never submitting anything on our own.
+This allows us to answer all kinds of queries and enables as a bonus a History replay feature: We can load a completed tactical
+save in replay mode and step through the history, never submitting anything on our own.
 
 ### In Context Of
 
@@ -190,25 +194,25 @@ Now that we have a rough understanding of the History, it's time to consider the
 players and networking submit contexts in order to initiate changes in the history. Why go through this extra hoop?
 
 It turns out that players can't actually be trusted to play by the rules. Permitting the AI as well as human players to build their
-own history frames is dangerous: Both AI and UI may operate on outdated information and essentially "cheat". It is far safer to present
-players with a list of available actions, and let them choose one action. The game rules can validate this action easily -- after all,
-the game rules handed out the action in the first place. The context can then build the history frame and the game rules add it to the History.
+own game states is dangerous: Both AI and UI may operate on outdated information and essentially "cheat". It is far safer to present
+players with a list of available actions and let them choose one action. The game rules can validate this action easily -- after all,
+the game rules handed out the action in the first place[^actions]. The context can then build the game state and the game rules add it to the History.
 
-The `XCGSContext_Ability` contains little information, but enough to deterministically build the history frame.
-In our example, it would contain something akin to "Unit 2 uses Ability 5 with Item 3 against Unit 1". Contexts are stored together with the history frame.
+The `XCGSContext_Ability` contains little information, but enough to deterministically build the game state.
+In our example, it would contain something akin to "Unit 2 uses Ability 5 with Item 3 against Unit 1". Contexts are stored together with their corresponding game state.
 This has some great advantages:
 
-* Multiplayer can be realized by sending the contexts only and letting both sides evaluate the context and build the history frame independently
-* Daily mission leaderboards can be validated by validating the contexts and checking if they create the same history frames
+* Multiplayer can be realized by sending the contexts only and letting both sides evaluate the context and build the game state independently
+* Daily mission leaderboards can be validated by validating the contexts and checking if they create the same game states
 * The tactical tutorial (a special history replay) can be realized by simply checking if the to-be-submitted context matches the stored context
 (rejecting it otherwise) and just not submitting anything, instead advancing the replay
 
 {{< interjection kind="advice" >}}
-All tactical user input must submit a context to achieve changes. It's perfectly fine to submit history frames directly in response,
+All tactical user input must submit a context to achieve changes. It's perfectly fine to submit game states directly in response,
 for example from event listeners, as long as the entire event chain can deterministically be triggered from the original context.<p />
 {{< /interjection >}}
 
-In other words, history frames contain the answer to "what changed?", contexts the answer to "why did it change?"  
+In other words, game states contain the answer to "what changed?", contexts the answer to "why did it change?"  
 
 #### Inputs and Outputs
 
@@ -216,26 +220,26 @@ Unfortunately, one piece is still missing: We don't know about some intermediate
 In our example, did the shot graze and deal 2 damage, or did it miss but deal 2 damage due to the stock weapon upgrade?
 
 Fortunately, since we store the context in the History, we can simply store that information in the context itself.
-The `XCGSContext_Ability` thus has variables part of the *input context* (who used what against whom?), and part of the *output context*
+The `XCGSContext_Ability` thus has variables part of the *input context* (who used what against whom?) and part of the *output context*
 (what's the hit result and damage values? which effects applied successfully?)[^context_in_out]
 
 #### Interruptions
 
 Contexts play another important role because they can produce more than one game state (the context will be cloned for every game state).
 For example, every regular ability activation first submits a "fake" activation (`eInterruptionStatus_Interrupt`) that triggers relevant events,
-but doesn't actually apply any effects. This gives reaction fire abilities a chance to react before the ability performs its effects after
-checking for `eInterruptionStatus_Interrupt` (consider Overwatch + Covering Fire).
+but doesn't actually apply any effects. This gives reaction fire abilities a chance to react before the ability performs its effects
+(consider Overwatch + Covering Fire).
 
 If nothing happened in response, this fake game state is removed from the history and the ability is properly activated (`eInterruptionStatus_None`).
-Otherwise, the original frame and all response frames are kept, a copy of the original context is re-validated (the unit may have died from reaction fire),
+Otherwise, the original game state and all response game states are kept, a copy of the original context is re-validated (the unit may have died from reaction fire),
 and this copy is properly submitted (`eInterruptionStatus_Resume`).[^rules]
 
-Further, movement abilities trigger an interruption frame for every single step. Only the steps actually causing a reaction and the final step are kept.
+Further, movement abilities trigger an interruption game state for every single step. Only the steps actually causing a reaction and the final step are kept.
 If no response actions are performed along the path, the movement is a single jump from source to destination.
 
 {{< interjection kind="advice" >}}
 If you have an event listener for successful ability activations, you may want to filter interruption steps with
-`if (GameState.GetContext().InterruptionStatus == eInterruptionStatus_Interrupt) return;`, lest your code runs twice for every ability activation.<p />
+`if (GameState.GetContext().InterruptionStatus == eInterruptionStatus_Interrupt) return ELR_NoInterrupt;`, lest your code runs twice for every ability activation.<p />
 {{< /interjection >}}
 
 With all this in mind, it's perhaps best to review the [architecture diagram](#flow-of-information) and see if it makes more sense.
@@ -280,24 +284,27 @@ defaultproperties
 Items and Units are not TacticalTransient, so even dead enemies and their items from tactical missions are retained. Additionally, we still store
 more and more history frames and contexts even though we don't need to look back into what happened on turn 3 of Gatecrasher.
 
-**StartStates** are history frames that act as a barrier. When we go from strategy to tactical, we create a start state and copy everything relevant into that start state.
-This includes units in the squad and excludes units not in the squad. When we iterate over all units in the History, we instead only get the units actually on
+**StartStates** are game states that act as a barrier. When we go from strategy to tactical, we create a start state and copy everything relevant into that start state.
+This includes units in the squad and excludes units not in the squad. When we iterate over all units in the History from now on, we only get the units actually on
 the battlefield.
 
 {{< interjection kind="info" >}}
-Start states are the only history frames that are allowed to be modified after being submitted as long as they're the latest frame in the history.
+Start states are the only game states that are allowed to be modified after being submitted as long as they're the latest game state in the history.
+They are usually combined with a History lock that prevents other game states from being submitted.
 
 The strategy->tactical transition is a relatively complex series of loading maps, instantiating state objects for map actors, spawning units, and
-setting up the mission script, all while the start state is on top of the History. At some point, the History is locked and everything proceeds as normal.
+setting up the mission script, all while the start state is on top of the History. At some point the History is unlocked and everything proceeds as normal.
 {{< /interjection >}}
 
-At the same time, submitting a start state causes all previous history frames to be squashed into a single history frame with a single "archive" context.
+At the same time, submitting a start state causes all previous game states to be squashed into a single game state with an "archive" context.
 At the end of the battle, this **archive state** is retrieved, its objects are copied into the new strategy start state, and the objects are updated with
 their tactical versions in case they participated in the tactical session.
 
 {{< interjection kind="advice" >}}
 The tactical History is **missing objects**. If you use `OnLoadedSavedGame` to make modifications with the installation of your mod, your changes may find some
-strategy objects missing. Prefer a combination of `OnLoadedSavedGameToStrategy` and `OnPostMission`.<p />
+strategy objects missing. Prefer a combination of `OnLoadedSavedGameToStrategy` and `OnPostMission`.
+
+If you write code that relies on certain objects being brought along in a strategy->tactical transition, you can add them in `OnPreMission`.
 {{< /interjection >}}
 
 Ideally this would mean that at some point, all enemy units and their weapons would be left behind.
@@ -313,9 +320,9 @@ because it may delete important units from mods that re-use base-game templates.
 
 There are a number of ways you can violate MVC:
 
-* Directly submit history frames from user input in tactical
-* Modify state objects part of already submitted history frames
-* Submit contexts or frames from visualization
+* Directly submit game states from user input in tactical
+* Modify state objects part of already submitted game states
+* Submit contexts or game states from visualization
 * Make changes dependent on the current state of the visualization
 * Cause observable side effects from code building a game state
 * Attempt to build a game state while there is a game state currently being built
@@ -342,10 +349,10 @@ it to be, but can cause race conditions with AI code.
 I think this violation is not justified, especially in face of the practical issues it causes with AI.<p />
 {{< /interjection >}}
 
-### ChangeHitResultForTarget
+### Hit Rolls
 
-A perhaps surprising fact is that rolling for an ability hit happens entirely outside of game state building, but rather before.
-This is despite our RNG seed definitely being part of the Model. Abilities actually support not submitting a game state upon failing to roll a hit.
+A perhaps surprising fact is that rolling for an ability hit happens entirely rather before a game state is built,
+despite the RNG seed definitely being part of the Model. Abilities actually support not submitting a game state upon failing to roll a hit.
 No abilities make use of this, but it seems like it was intended to work for the concealment system, where enemies would have a chance
 to notice player units.
 
@@ -355,7 +362,7 @@ More seriously, some effects directly write to state objects in the history as p
 Consider this simplified function from `X2Effect_Parry`:
 
 ```java
-function bool ChangeHitResultForTarget(out EAbilityHitResult NewHitResult)
+function bool ChangeHitResultForTarget(XCGS_Unit TargetUnit, out EAbilityHitResult NewHitResult)
 {
 	if (TargetUnit.Parry > 0 && TargetUnit.IsAbleToAct())
 	{
@@ -367,7 +374,12 @@ function bool ChangeHitResultForTarget(out EAbilityHitResult NewHitResult)
 }
 ```
 
-This is about as serious in that it only happens in response abilities, but it does write directly to the History. Bad idea.<p />
+This is about as serious in that it only happens in response abilities, but it does write directly to the History. Bad idea.
+
+{{< interjection kind="advice" >}}
+There are two kinds of random functions: The built-in `Rand()` function and the Firaxis `` `SYNC_RAND() `` macro.
+Use `Rand()` for visualization and `` `SYNC_RAND() `` for game state code -- the former does not affect the saved RNG seed, the latter does.<p />
+{{< /interjection >}}
 
 ### Achievements and Mission Completion
 
@@ -431,6 +443,7 @@ and use them to confidently write and review code that interacts with the Histor
 
 *I would like to thank Xymanek for reviewing a draft of this blog post and providing valuable feedback.*
 
+[^actions]: See `X2TacticalGameRuleset:GetGameRulesCache_Unit`
 [^context_in_out]: See `XComGameStateContext_Ability:InputContext/OutputContext` and corresponding definitions in `X2TacticalGameRulesetDataStructures`
 [^rules]: See `X2GameRuleset:SubmitGameStateContext_Internal`
 [^dmg]: See `XComGameState_EnvironmentDamage`
