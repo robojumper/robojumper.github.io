@@ -17,7 +17,7 @@ Other topics I plan on covering are data layout, out parameters and subtyping, f
 
 In this blog post, we're going to explore how strings and names in UnrealScript work.
 
-# Textbook definitions
+## Textbook definitions
 
 The official UnrealScript documentation ends up being quite terse:
 
@@ -177,7 +177,7 @@ Simply put, a `_Number` suffix is stripped before interning. Our names don't act
 
 Let `'XComLWTuple'` be our sixth name. Then the name `'XComLWTuple'` would be represented as `6|0` (0 for no suffix). `'XComLWTuple_0'` would be represented as `6|1`, `'XComLWTuple_1'` as `6|2`, `'XComLWTuple_345'` as `6|346`.
 
-Our example code managed to trigger this optimization: Our names are `'MySomewhatLongerBaseStringForHigherMemoryUsage_0'`, `'MySomewhatLongerBaseStringForHigherMemoryUsage_1'`, and so on. This means that the game interns the `MySomewhatLongerBaseStringForHigherMemoryUsage'` once and all our synthetic names re-use that index, just with a different number part. Testing two names for equality is thus a matter of comparing the two integers of the two names.
+Our example code managed to trigger this optimization: Our names are `'MySomewhatLongerBaseStringForHigherMemoryUsage_0'`, `'MySomewhatLongerBaseStringForHigherMemoryUsage_1'`, and so on. This means that the game interns the `MySomewhatLongerBaseStringForHigherMemoryUsage` once and all our synthetic names re-use that index, just with a different number part. Testing two names for equality is thus a matter of comparing the two integers of the two names.
 
 #### Let's Break It For Real
 

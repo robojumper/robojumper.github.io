@@ -1,0 +1,53 @@
+digraph rules {
+    bgcolor="#fffffd";
+    node [shape=box style=filled];
+
+    subgraph cluster_model {
+        label="Model";
+        bgcolor="pink";
+
+        history [label="History" fillcolor="lightblue"];
+    }
+
+    subgraph cluster_view {
+        label="View";
+        bgcolor="orange";
+
+        world [label="World"];
+        pawns [label="Pawns"];
+        visualization [label="Visualization"];
+    }
+
+    subgraph cluster_controller {
+        label="Controller";
+        bgcolor="pink";
+
+        submission [label="Submission"];
+        context [label="Contexts" fillcolor="lightblue"];
+        visibility [label="Visibility"];
+        actions [label="Action Availability"];
+        players [label="Players"];
+    }
+
+    templates [label="Templates"];
+    networking [label="Networking"];
+
+    history -> visualization;
+    visualization -> world;
+    visualization -> pawns;
+    history -> visibility;
+    visibility -> actions;
+    history -> actions;
+    actions -> players;
+    players -> context;
+    context -> submission;
+    submission -> history;
+
+    networking -> context;
+    context -> networking;
+
+    templates -> pawns;
+    templates -> submission;
+    templates -> actions;
+    templates -> visualization;
+} 

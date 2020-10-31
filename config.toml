@@ -86,7 +86,7 @@ paginate = 10
 
   [markup.tableOfContents]
     startLevel = 2
-    endLevel = 3
+    endLevel = 4
 
 [taxonomies]
   tag = "tags"

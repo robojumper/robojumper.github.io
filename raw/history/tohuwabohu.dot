@@ -1,0 +1,24 @@
+digraph props {
+    bgcolor="#fffffd";
+	node [shape=box];
+	concentrate=true;
+    
+    world [style=filled, fillcolor=lightblue, label = "World"];
+
+	renderer [style=filled, fillcolor=orange, label = "Renderer"];
+	physics [style=filled, fillcolor=pink, label = "Physics"];
+	animation [style=filled, fillcolor=pink, label = "Animation"];
+	networking [style=filled, fillcolor=pink, label = "Networking"];
+
+	gameplay [style=filled, fillcolor=pink, label = "Game Rules"];
+
+    world -> renderer
+	world -> physics
+	physics -> world
+	world -> networking
+	networking -> world
+	world -> animation
+	animation -> world
+	world -> gameplay
+	gameplay -> world
+}

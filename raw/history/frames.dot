@@ -1,0 +1,79 @@
+digraph props {
+    bgcolor="#fffffd";
+    node [shape=record];
+
+    subgraph cluster_model {
+        label="History";
+
+        subgraph cluster_frame1 {
+            label="History Index: 1";
+            bgcolor="pink";
+            unit_1_1 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Unit_1</td></tr>
+                <tr><td border="1">ObjectID: 1</td></tr>
+                <tr><td border="1">Health: 4</td></tr>
+                <tr><td border="1">Overwatch: true</td></tr>
+                </table>>];
+            unit_1_2 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Unit_2</td></tr>
+                <tr><td border="1">ObjectID: 2</td></tr>
+                <tr><td border="1">Health: 5</td></tr>
+                </table>>];
+
+            weapon_1_3 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Item_1</td></tr>
+                <tr><td border="1">ObjectID: 3</td></tr>
+                <tr><td border="1">Owner: 2</td></tr>
+                <tr><td border="1">Ammo: 3</td></tr>
+                </table>>];
+
+            ability_1_5 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Ability_1</td></tr>
+                <tr><td border="1">ObjectID: 5</td></tr>
+                <tr><td border="1">Cooldown: 0</td></tr>
+                </table>>];
+
+            unit_1_4 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Unit_3</td></tr>
+                <tr><td border="1">ObjectID: 4</td></tr>
+                <tr><td border="1">Health: 5</td></tr>
+                </table>>];
+        }
+
+        subgraph cluster_frame2 {
+            label="History Index: 2";
+            bgcolor="pink";
+
+            unit_2_1 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Unit_4</td></tr>
+                <tr><td border="1">ObjectID: 1</td></tr>
+                <tr><td border="1">Health: 2</td></tr>
+                <tr><td border="1">Overwatch: false</td></tr>
+                </table>>];
+
+            unit_2_2 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Unit_5</td></tr>
+                <tr><td border="1">ObjectID: 2</td></tr>
+                <tr><td border="1">Health: 5</td></tr>
+                </table>>];
+
+            weapon_2_3 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Item_2</td></tr>
+                <tr><td border="1">ObjectID: 3</td></tr>
+                <tr><td border="1">Owner: 2</td></tr>
+                <tr><td border="1">Ammo: 2</td></tr>
+                </table>>];
+            
+            ability_2_5 [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9">
+                <tr><td border="1">XCGS_Ability_2</td></tr>
+                <tr><td border="1">ObjectID: 5</td></tr>
+                <tr><td border="1">Cooldown: 3</td></tr>
+                </table>>];
+        }
+
+        unit_1_1 -> unit_2_1;
+        unit_1_2 -> unit_2_2;
+        weapon_1_3 -> weapon_2_3;
+        ability_1_5 -> ability_2_5;
+    }
+}
