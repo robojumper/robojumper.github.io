@@ -100,6 +100,11 @@ Let's look at some of these parts in more detail!
 
 ### History Details
 
+{{< interjection kind="info" >}}
+Some of this info is also available on the [Game States](https://www.reddit.com/r/xcom2mods/wiki/index/game_states) page of the /r/xcom2mods wiki.
+That particular page contains some useful code samples for directly interacting with the History as it is implemented in XCOM 2.<p />
+{{< /interjection >}}
+
 #### Objects
 
 We need all sorts of information in our model. Information about units, items, their abilities, applied effects, the state of the mission script, objectives.
@@ -145,13 +150,17 @@ Worse, if gameplay advances, visualization may miss certain states and instead l
 
 {{< interjection kind="info" >}}
 If a unit was on overwatch in the past state and is now no longer on overwatch, we can show an "Overwatch removed" flyover.  
-If a movement will result in three different other units performing overwatch shots, we can schedule a super cinematic camera movement.<p />
+If a movement will result in three different other units performing overwatch shots, we can prepare a super cinematic camera movement.<p />
 {{< /interjection >}}
 
 It makes sense to store our history as an append-only list of states. In order to modify the History,
-we create a new container (`XComGameState`, "game state", "history frame") and clone the objects before adding them to
-the new history frame and modifying them. When it's done, we submit it to the history. Note the difference between a
-history frame (`XComGameState`) and a state object (`XComGameState_BaseObject`, `XComGameState_Unit`).
+we create a new container (`XComGameState`) and clone the objects before adding them to
+the new history frame and modifying them. When it's done, we submit it to the history.
+
+{{< interjection kind="advice" >}}
+We call the `XComGameState` "history frame". Note that history frames and state objects (`XComGameState_BaseObject`, `XComGameState_Unit`) are different.
+To make things more confusing, history frames are sometimes referred to as "game states", and state objects as "states", for example "unit states".<p />
+{{< /interjection >}}
 
 As an optimization, we only need to clone the objects we are interested in modifying:
 
@@ -168,16 +177,16 @@ Hold on to and pass around `StateObjectReferences`, not `XCGS_` objects. The mor
 
 On the other hand, simply requesting state objects from the history may result in you looking into the future. You can query history frames for state
 objects, and you can ask the History for the state objects at arbitrary history indices. This is especially important for visualization, which may end up
-spoiling results if it doesn't look at state objects from the exact history index as the visualized frame.
+[spoiling results](#achievements-and-mission-completion) if it doesn't look at state objects from the exact history index as the visualized frame.
 {{< /interjection >}}
 
 This allows us to answer all kinds of questions and enables as a bonus a History replay feature: We can load a completed tactical
 save in replay mode, and step through the history, never submitting anything on our own.
 
-## In Context Of
+### In Context Of
 
 Now that we have a rough understanding of the History, it's time to consider the role of the Contexts
-(classes with an `XComGameStateContext_` prefix, abbreviated as `XCGSContext_`). In our original diagram,
+(classes with an `XComGameStateContext_` prefix, here abbreviated as `XCGSContext_`, sometimes also `XCGSC_`). In our original diagram,
 players and networking submit contexts in order to initiate changes in the history. Why go through this extra hoop?
 
 It turns out that players can't actually be trusted to play by the rules. Permitting the AI as well as human players to build their
@@ -201,16 +210,16 @@ for example from event listeners, as long as the entire event chain can determin
 
 In other words, history frames contain the answer to "what changed?", contexts the answer to "why did it change?"  
 
-### Inputs and Outputs
+#### Inputs and Outputs
 
 Unfortunately, one piece is still missing: We don't know about some intermediate results that lead to the changes.
 In our example, did the shot graze and deal 2 damage, or did it miss but deal 2 damage due to the stock weapon upgrade?
 
 Fortunately, since we store the context in the History, we can simply store that information in the context itself.
 The `XCGSContext_Ability` thus has variables part of the *input context* (who used what against whom?), and part of the *output context*
-(what's the hit result and damage values? which effects applied successfully?)[^context_io]
+(what's the hit result and damage values? which effects applied successfully?)[^context_in_out]
 
-### Interruptions
+#### Interruptions
 
 Contexts play another important role because they can produce more than one game state (the context will be cloned for every game state).
 For example, every regular ability activation first submits a "fake" activation (`eInterruptionStatus_Interrupt`) that triggers relevant events,
@@ -231,19 +240,19 @@ If you have an event listener for successful ability activations, you may want t
 
 With all this in mind, it's perhaps best to review the [architecture diagram](#flow-of-information) and see if it makes more sense.
 
-## Templated...
+### Templated
 
 Templates sort of transcend the entire system. They contain view data, game rules input, and instructions for game rules.
 Dissecting the `X2AbilityTemplate`, we have:
 
 * View
   * Ability icons
-  * Targeting methods
-  * `BuildVisualizationFn` (queues the visualization actions for activated ability)
+  * Targeting methods (allowing the user to select an action)
+  * `BuildVisualizationFn` (prepares the visualization for activated ability)
 * Game rules input
   * Conditions
   * Costs
-  * Target styles
+  * Target styles (building the list of actions)
 * Game rules instructions
   * Effects
   * Costs
@@ -253,12 +262,12 @@ Dissecting the `X2AbilityTemplate`, we have:
 This is, of course, not a violation of MVC. We factored all of these aspects into the original architecture diagram. No data flows from View to anywhere else.<p />
 {{< /interjection >}}
 
-## ...and Archived
+### Archived
 
 Our approach to the History has the problem of unlimited growth. With every mission, our save files contains more and more objects,
 and more and more versions of the same object. This would spiral out of control quickly. Firaxis employs a number of mitigations.
 
-**TacticalTransient** objects are never retained after the end of a tactical mission. This includes ability states, effect states, players.
+**TacticalTransient** objects are never retained after the end of a tactical mission. This includes ability states, effect states, and players.
 You can make objects TacticalTransient by setting the class variable `bTacticalTransient` in `defaultproperties`:
 
 ```java
@@ -278,8 +287,8 @@ the battlefield.
 {{< interjection kind="info" >}}
 Start states are the only history frames that are allowed to be modified after being submitted as long as they're the latest frame in the history.
 
-The strategy->tactical transition is a relatively complex series of loading maps, instantiating state objects for map actors, spawning units,
-setting up the mission script. At some point, the History is locked and everything proceeds as normal.
+The strategy->tactical transition is a relatively complex series of loading maps, instantiating state objects for map actors, spawning units, and
+setting up the mission script, all while the start state is on top of the History. At some point, the History is locked and everything proceeds as normal.
 {{< /interjection >}}
 
 At the same time, submitting a start state causes all previous history frames to be squashed into a single history frame with a single "archive" context.
@@ -314,16 +323,19 @@ There are a number of ways you can violate MVC:
 {{< interjection kind="advice" >}}
 Sometimes it's not obvious whether a game state is "in flight". Event listeners registered with `ELD_Immediate` for events triggered
 in game state code can usually rely on `NewGameState` being in flight and mutable, but event listeners registered with `ELD_OnStateSubmitted`
-cannot.
+cannot. The [Events/Deferral](https://www.reddit.com/r/xcom2mods/wiki/index/events#wiki_deferral) section of the /r/xcom2mods wiki
+elaborates on this point further.
 
-Moreover, a game state might sometimes be in flight due to multi-threading/latent submissions in WotC. This deserves an own blog post,
+Moreover, a game state might sometimes be in flight due to multi-threading/latent submissions in WotC. This deserves a separate blog post,
 just don't submit a context while `` `XCOMGAME.GameRuleset.IsDoingLatentSubmission() `` returns `true` for now.
 {{< /interjection >}}
+
+For the rest of the blog post, we'll look at some particular violations that happen in base-game code.
 
 ### Unconscious Units
 
 Units knocked out will have a knockback effect applied to them that may move them to a different tile. Physics rarely cooperate, so
-once the ragdoll settles, it submits a game state that corrects the unit's position. This ensures the unit is where players would expect
+once the ragdoll settles, it submits a game state that corrects the unit's position[^ragdoll]. This ensures the unit is where players would expect
 it to be, but can cause race conditions with AI code.
 
 {{< interjection kind="info" >}}
@@ -363,8 +375,8 @@ Steam/platform achievements are triggered when the game state is built. This ess
 as the player hits the "confirm" button. This could easily be fixed by making achievement unlocks part of the visualization.
 
 {{< interjection kind="advice" >}}
-Every context has a `PostBuildVisualizationFn` delegate array that can be used to schedule visualization from game state code even if you don't
-control the variables in the context.<p />
+Every context has a `PostBuildVisualizationFn` delegate array that can be added to from game state code in order to add additional visualization
+even if you don't control the variables in the context.<p />
 {{< /interjection >}}
 
 Similarly, upon confirming the action that will complete the mission, all UI is hidden.
@@ -391,6 +403,36 @@ It's iffy and okay to feel a bit uneasy about, but it works *OK-ish*.
 Sometimes map actors like to self-destruct right after confirming an action, but this could easily be just a visualization bug, not an MVC violation.
 {{< /interjection >}}
 
-[^context_io]: See `XComGameStateContext_Ability:InputContext/OutputContext` and corresponding definitions in `X2TacticalGameRulesetDataStructures`
+### Cursor targeting
+
+Pixel hunting is the XCOM player's favorite obsession. Unsurprisingly, grenades and heavy weapons allow freely targeting the ability on
+the tactical map, so the game rules don't actually provide a list of all available actions and leave it to the players, which mostly
+results in the AI hitting seemingly (and sometimes actually impossible) shots -- players create the target for cursor-targeted abilities
+on the fly and there's no validation.
+
+On top of that, some targeting methods actually use info from the unit pawn to build the heavy weapon path, particularly around
+visibility checking and ray tracing[^rocket].
+
+{{< interjection kind="info" >}}
+There's no good solution for the first problem. Even tile-snapping would result in a huge possible target list.
+The second problem is a plain old MVC violation that should have been addressed by using the unit state tile location and not the actor location.<p />
+{{< /interjection >}}
+
+### Strategy
+
+This article was focused on tactical. The strategy gameplay is **a lot** less principled about this, knows no concept of available actions and often submits
+`ChangeContainers` (a dummy context where the game-state is pre-built already) directly. Narrative moments randomly interfere and cause race conditions
+with UI screens that have pending game states (like customization). Strategy keeps the History for state management, but doesn't concern itself with MVC at all.
+
+## Closing Words
+
+I hope this article was insightful and helped you understand XCOM 2's tactical architecture. Moreover, I hope you will keep the presented concepts in mind
+and use them to confidently write and review code that interacts with the History, Contexts, and tactical MVC.
+
+*I would like to thank Xymanek for reviewing a draft of this blog post and providing valuable feedback.*
+
+[^context_in_out]: See `XComGameStateContext_Ability:InputContext/OutputContext` and corresponding definitions in `X2TacticalGameRulesetDataStructures`
 [^rules]: See `X2GameRuleset:SubmitGameStateContext_Internal`
 [^dmg]: See `XComGameState_EnvironmentDamage`
+[^ragdoll]: See `XComUnitPawn:SyncCorpse`
+[^rocket]: See `X2TargetingMethod_RocketLauncher:Update`, particularly `FiringUnit.Location`
