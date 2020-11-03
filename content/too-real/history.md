@@ -1,8 +1,8 @@
 ---
 title: "History"
 summary: "This article reviews the XCOM 2 implementation of the MVC architecture and investigates some finer details and consequences..."
-date: 2020-10-31T10:00:00+01:00
-draft: true
+date: 2020-11-03T18:00:00+01:00
+draft: false
 tags: ["unrealscript", "xcom2"]
 ---
 
