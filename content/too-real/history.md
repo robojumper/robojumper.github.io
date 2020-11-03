@@ -196,7 +196,7 @@ players and networking submit contexts in order to initiate changes in the histo
 It turns out that players can't actually be trusted to play by the rules. Permitting the AI as well as human players to build their
 own game states is dangerous: Both AI and UI may operate on outdated information and essentially "cheat". It is far safer to present
 players with a list of available actions and let them choose one action. The game rules can validate this action easily -- after all,
-the game rules handed out the action in the first place[^actions]. The context can then build the game state and the game rules add it to the History.
+the game rules handed out the action in the first place.[^actions] The context can then build the game state and the game rules add it to the History.
 
 The `XCGSContext_Ability` contains little information, but enough to deterministically build the game state.
 In our example, it would contain something akin to "Unit 2 uses Ability 5 with Item 3 against Unit 1". Contexts are stored together with their corresponding game state.
@@ -342,7 +342,7 @@ For the rest of the blog post, we'll look at some particular violations that hap
 ### Unconscious Units
 
 Units knocked out will have a knockback effect applied to them that may move them to a different tile. Physics rarely cooperate, so
-once the ragdoll settles, it submits a game state that corrects the unit's position[^ragdoll]. This ensures the unit is where players would expect
+once the ragdoll settles, it submits a game state that corrects the unit's position.[^ragdoll] This ensures the unit is where players would expect
 it to be, but can cause race conditions with AI code.
 
 {{< interjection kind="info" >}}
@@ -351,7 +351,7 @@ I think this violation is not justified, especially in face of the practical iss
 
 ### Hit Rolls
 
-A perhaps surprising fact is that rolling for an ability hit happens entirely rather before a game state is built,
+A perhaps surprising fact is that rolling for an ability hit happens entirely before a game state is built,
 despite the RNG seed definitely being part of the Model. Abilities actually support not submitting a game state upon failing to roll a hit.
 No abilities make use of this, but it seems like it was intended to work for the concealment system, where enemies would have a chance
 to notice player units.
@@ -423,7 +423,7 @@ results in the AI hitting seemingly (and sometimes actually impossible) shots --
 on the fly and there's no validation.
 
 On top of that, some targeting methods actually use info from the unit pawn to build the heavy weapon path, particularly around
-visibility checking and ray tracing[^rocket].
+visibility checking and ray tracing.[^rocket]
 
 {{< interjection kind="info" >}}
 There's no good solution for the first problem. Even tile-snapping would result in a huge possible target list.
