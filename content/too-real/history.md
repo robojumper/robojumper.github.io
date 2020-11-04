@@ -309,7 +309,7 @@ If you write code that relies on certain objects being brought along in a strate
 
 Ideally this would mean that at some point, all enemy units and their weapons would be left behind.
 Unfortunately, there are multi-part missions like the Shen's Last Gift tower mission. This tactical->tactical transfer would mean strategy objects would
-be left behind, so save files still accumulate some garbage.
+be left behind, so we can't leave objects behind and the archive state continues to accumulate some garbage.
 
 {{< interjection kind="info" >}}
 There is an [attempt](https://github.com/X2CommunityCore/X2WOTCCommunityHighlander/pull/179) to fix it in the Highlander. Everybody is scared to approve it
