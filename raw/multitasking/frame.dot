@@ -1,0 +1,39 @@
+digraph frame {
+    bgcolor="#fffffd";
+    node [shape=box style=filled];
+    newrank = true;
+
+    subgraph cluster_tick {
+        label="Tick";
+        bgcolor="lightblue";
+
+        phys_pre [label="Tick Pre-Async" fillcolor="pink"]
+        phys_during [label="Tick Async"];
+        phys [label="Physics"];
+        phys_post [label="Tick Post-Async"];
+    }
+
+    subgraph cluster_render {
+        label="Render";
+        bgcolor="orange";
+
+        prerender [label="PreRender"];
+        render [label="Render"];
+    }
+
+    audio [label="Audio"];
+
+    phys_pre -> phys;
+    phys_pre -> phys_during;
+    phys_during -> phys_post;
+    phys -> phys_post;
+    phys_post -> prerender;
+    prerender -> render;
+    render -> audio;
+
+    audio -> phys_pre;
+
+    {rank = same; audio, phys_pre}
+    {rank = same; prerender, phys_post}
+    {rank = same; render, phys_during}
+} 

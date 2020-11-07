@@ -30,7 +30,7 @@ paginate = 10
 
 [params]
   author = "robojumper" # You can also set author in post front matter individually
-  subTitle = "robojumper's blog about the Unreal Engine and XCOM 2 modding."
+  subTitle = "About the Unreal Engine and XCOM 2 modding."
 
   # Source URL of the website, will appear in the footer
   sourceURL = "https://github.com/robojumper/robojumper.github.io"
@@ -51,7 +51,7 @@ paginate = 10
 
   # Open Graph & Twitter Card variables
   # You can also set description and images in post front matter individually
-  description = "robojumper's blog about the Unreal Engine and XCOM 2 modding."
+  description = "About the Unreal Engine and XCOM 2 modding."
   images = ["img/profile.png"] # This will use the image called og.png in static/img folder
 
   # Posts shown in homepage

@@ -1,0 +1,14 @@
+digraph frame {
+    bgcolor="#fffffd";
+    node [shape=box style=filled];
+
+    render [label="Render" fillcolor="orange"];
+	update [label="Update" fillcolor="lightblue"];
+	{ rank = same; update;
+		input [label="Input" fillcolor="pink"];
+	}
+
+    input -> update;
+	update -> render;
+	render -> input;
+} 
