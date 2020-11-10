@@ -1,8 +1,7 @@
 ---
 title: "Multitasking"
 summary: "This article explains the different kinds of parallelism and concurrency happening in XCOM 2 and UnrealScript despite the engine's single-threaded nature..."
-date: 2020-11-08T18:00:00+01:00
-draft: true
+date: 2020-11-10T17:45:00+01:00
 tags: ["unrealscript", "xcom2"]
 math: true
 ---
@@ -75,7 +74,6 @@ Games are [real-time programs](https://en.wikipedia.org/wiki/Real-time_computing
 *soft deadline* of 33ms (30 FPS), 17ms (60 FPS), or 7ms (144 FPS). When the total computations for a single frame take longer than that,
 we miss the deadline. This doesn't cause any problems with the hardware, but it degrades the quality of the service.<p />
 {{< /interjection >}}
-
 
 ## Cooperative Multitasking
 
@@ -155,7 +153,7 @@ This keeps our `Tick` function tidy and our deadlines happy.
 
 ### Async loading
 
-This is somewhat what the game does when asynchronously loading objects in the background. Every frame, the Unreal Engine 3
+This is basically what the game does when asynchronously loading objects in the background. Every frame, the Unreal Engine 3
 dedicates at most 5 milliseconds to background loading.
 
 This makes our loading performance (as well as our earlier AI calculations) dependent on the frame rate.
