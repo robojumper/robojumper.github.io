@@ -95,7 +95,7 @@ It is obvious that base-game config is loaded first. DLCs happen to be loaded af
 The game knows of the mod directories through a config array `ModRootDirs` in `XComEngine.ini`, and it turns out that the
 order there determines whether workshop mods or local mods are loaded first! Within these orders, there are different rules:
 
-* Workshop directories are loaded in the order the Steam API returns them -- generally believed to be subscription date
+* Workshop directories load order is unclear and believed to be either based on workshop ID or subscription date
 * Mod directories are loaded alphabetically[^alpha]
 
 {{< interjection kind="advice" >}}
