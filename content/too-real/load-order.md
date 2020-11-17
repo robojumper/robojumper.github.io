@@ -84,7 +84,8 @@ Minor formatting differences such as white-space, indentation, capitalization an
 
 Since single-value types use the last inserted entry, the config file processed last usually wins.
 But at the same time, if a certain approach relies on removing previous array entries, only the first
-processed mod has any chance to textually match an original entry. Config load order is important, and here's the guaranteed parts:
+processed mod has any chance to textually match an original entry. Config load order is important, and here's the
+guaranteed parts of the order:
 
 1. User directory (`Documents/My Games/XCOM 2 (WotC)/XComGame/Config`)
 2. DLC directories (`XCOM 2/XCom2-WarOfTheChosen/XComGame/DLC/*/Config`)
@@ -95,13 +96,13 @@ The game knows of the mod directories through a config array `ModRootDirs` in `X
 order there determines whether workshop mods or local mods are loaded first! Within these orders, there are different rules:
 
 * Workshop directories are loaded in the order the Steam API returns them -- generally believed to be subscription date
-* Mod directories are loaded alphabetically
+* Mod directories are loaded alphabetically[^alpha]
 
 {{< interjection kind="advice" >}}
 A common misconception is that the order of the `ActiveMods` in `XComModOptions.ini` determines config load order. For the
-longest time, the Alternative Mod Launcher had offered a "load order" column that affects only the `ActiveMods` array.
+longest time, the Alternative Mod Launcher had offered a "load order" column that affected only the `ActiveMods` array.
 
-This is wrong. Config load order is rarely guaranteed and should not be relied on.
+This is wrong. Config load order is rarely guaranteed and should not be relied on by mod authors.
 {{< /interjection >}}
 
 ### Workarounds
@@ -270,4 +271,6 @@ I hope this cleared some things up. If there's one takeaway here, it's that conf
 is not expressive enough to solve many problems -- and UnrealScript code can help. For some particular problems, the Highlander can
 jump in and provide additional helpers -- don't hesitate to ask if the Highlander can help with one of them.
 
+[^alpha]: According to [Raymond Chen](https://devblogs.microsoft.com/oldnewthing/20140304-00/?p=1603), on NTFS at least it's
+"B-tree order, which if you cover one eye and promise not to focus too closely looks approximately alphabetical for US-English".
 [^docs]: This feature doesn't have great documentation right now. I will add a link here once the Highlander has it documented.
