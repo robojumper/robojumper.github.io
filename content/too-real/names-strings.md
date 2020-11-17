@@ -280,8 +280,10 @@ This warning references an `INI` file even when we haven't modified any config f
 > Warning, config variable coverType actually named CoverType
 
 because the compiler had, at some point (perhaps even in `XComGame`) seen the name `CoverType`, so this variable is actually called `CoverType`.
+In fact, the compiler seemingly records this mismatch because config files are actually case-sensitive, and the runtime is clever enough to
+not use an arbitrary string representation of the variable name when loading from config.
 
-Why that warning is a thing? Nobody knows, all of this is case-insensitive anyway. To "fix" it, either follow the *opposite* of the advice and call it `CoverType`, or choose an entirely different name.
+To "fix" it, either follow the *opposite* of the advice and call it `CoverType`, or choose an entirely different name.
 
 ## Closing Words
 
