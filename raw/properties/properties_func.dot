@@ -1,0 +1,70 @@
+digraph props {
+    bgcolor="#fffffd";
+    node [shape=record];
+    
+    func [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">CheckCondition</td>
+        <td border="1">ArgsSize: 12</td>
+        <td port="f0" border="1">Properties</td>
+    </tr></table>>]
+    
+    props [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p0" border="1">0</td>
+        <td port="p1" border="1">1</td>
+        <td port="p2" border="1">2</td>
+        <td port="p3" border="1">3</td>
+        <td port="p4" border="1">4</td>
+    </tr></table>>];
+    prop0 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">ChkObject</td>
+        <td border="1">Arity: 1</td>
+        <td border="1">Offset: 0</td>
+    </tr></table>>];
+    prop1 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">Fact</td>
+        <td border="1">Arity: 1</td>
+        <td border="1">Offset: 8</td>
+    </tr></table>>];
+    prop2 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">Dbg</td>
+        <td border="1">Arity: 1</td>
+        <td border="1">Offset: &lt;OUT PARAM&gt;</td>
+    </tr></table>>];
+    prop3 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">Tmp</td>
+        <td border="1">Arity: 1</td>
+        <td border="1">Offset: 16</td>
+    </tr></table>>];
+    prop4 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">RetValue</td>
+        <td border="1">Offset: 20</td>
+        <td border="1">PackIdx: 0</td>
+    </tr></table>>];
+    
+    { rank = same;
+    data [shape = none, style="", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">Data</td>
+        <td bgcolor="pink" border="1">XComUnitPawn</td>
+        <td bgcolor="pink" border="1">673</td>
+        <td border="1"></td>
+        <td bgcolor="pink" border="1">0.0f</td>
+        <td bgcolor="pink" border="1">false</td>
+    </tr><tr>
+        <td border="1">Size</td>
+        <td border="1">8</td>
+        <td border="1">4</td>
+        <td border="1">4 (padding)</td>
+        <td border="1">4</td>
+        <td border="1">4</td>
+    </tr></table>>];
+    }
+
+    "func":f0 -> props;
+    func -> data;
+
+    "props":p0 -> "prop0";
+    "props":p1 -> "prop1";
+    "props":p2 -> "prop2";
+    "props":p3 -> "prop3";
+    "props":p4 -> "prop4";
+}

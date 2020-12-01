@@ -10,6 +10,11 @@ even be changed. We're going to look at the different kinds of load orders, clea
 
 ## Config files
 
+{{< interjection kind="info" >}}
+The /r/xcom2mods wiki has a page [Configuration Files and Variables](https://www.reddit.com/r/xcom2mods/wiki/wotc_modding/config_files)
+that contains a more practical introduction to config files, troubleshooting advice and some mod interoperability tricks.<p />
+{{< /interjection >}}
+
 This is the most important and most impactful kind of load order. As a quick reminder, config files consist of key-value
 pairs (KVP) that are conceptually inserted into a multi-map (a key-values map where multiple values can correspond to one key).
 
@@ -56,6 +61,11 @@ CArray[1]="AtOne"
 CArray[3]="AtThree"
 ; results in CArray = ["AtZero", "AtOne"] in UnrealScript
 ```
+
+{{< interjection kind="info" >}}
+h4ilst0rm pointed out to me that for arrays in structs, skipped entries are filled with the default value, so if this array were part of
+a struct, `(CArray[0]="AtZero", CArray[1]="AtOne", CArray[3]="AtThree")` would result in `["AtZero", "AtOne", "", "AtThree"]`.<p />
+{{< /interjection >}}
 
 ### Textual identity
 

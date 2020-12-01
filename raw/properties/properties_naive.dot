@@ -1,0 +1,84 @@
+digraph props {
+    bgcolor="#fffffd";
+    node [shape=record];
+    
+    { rank = same; props;
+    instance [shape=ellipse, peripheries=2, height=0.5, fixedsize=true];
+    }
+    
+    props [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p0" border="1">0</td>
+        <td port="p1" border="1">1</td>
+        <td port="p2" border="1">2</td>
+    </tr></table>>];
+    prop0 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">GlobalCounters</td>
+        <td border="1">2</td>
+        <td border="1" bgcolor="pink">123</td>
+        <td border="1" bgcolor="pink">-555</td>
+    </tr></table>>];
+    prop1 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">State</td>
+        <td border="1">1</td>
+        <td port="dp" border="1">Properties</td>
+    </tr></table>>];
+    prop2 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">OnConditionChange</td>
+        <td border="1">1</td>
+        <td border="1" bgcolor="pink">&lt;function pointer&gt;</td>
+    </tr></table>>];
+    
+    sprops [shape = none, style=filled, fillcolor=lightblue, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="s0" border="1">0</td>
+        <td port="s1" border="1">1</td>
+        <td port="s2" border="1">2</td>
+    </tr></table>>];
+    
+    sp0 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">Cached</td>
+        <td border="1">1</td>
+        <td border="1" bgcolor="pink">true</td>
+    </tr></table>>];
+    
+    sp1 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">PrevValue</td>
+        <td border="1">1</td>
+        <td border="1" bgcolor="pink">false</td>
+    </tr></table>>];
+    
+    sp2 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1">ChangeCounters</td>
+        <td border="1">1</td>
+        <td border="1" port="vecp" bgcolor="pink">&lt;pointer&gt;</td>
+        <td border="1" bgcolor="pink">Count: 3</td>
+        <td border="1" bgcolor="pink">Max: 4</td>
+    </tr></table>>];
+
+    vec [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td border="1" bgcolor="pink">5</td>
+        <td border="1" bgcolor="pink">7</td>
+        <td border="1" bgcolor="pink">2</td>
+        <td border="1"></td>
+    </tr></table>>];
+    
+    { rank = same; sp0;
+    legend [shape = none, style="", label = <<table border="0" cellspacing="0" cellpadding="9">
+    <tr><td border="1" bgcolor="lightblue"></td><td border="1">Properties array</td></tr>
+    <tr><td border="1" bgcolor="pink"></td><td border="1">Data</td></tr>
+    </table>>];
+    }
+    
+    
+
+    instance -> props;
+
+    "props":p0 -> "prop0";
+    "props":p1 -> "prop1";
+    "props":p2 -> "prop2";
+    "prop1":dp -> "sprops";
+    
+    "sprops":s0 -> "sp0";
+    "sprops":s1 -> "sp1";
+    "sprops":s2 -> "sp2";
+    "sp2":vecp -> "vec";
+}
