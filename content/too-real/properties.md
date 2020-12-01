@@ -242,10 +242,10 @@ struct Map_Mirror
 };
 ```
 
-Wow! That's a lot! All of this is necessary to exactly *mirror* the C++ data layout. All properties `const` to prevent UnrealScript from
+Wow! That's a lot! All of this is necessary to exactly *mirror* the C++ data layout. All properties are `const` to prevent UnrealScript from
 mucking with native data structures, while C++ code can freely work with this map. Notably, these structs are kept in sync manually:
-The `{TMap<FName, FUnitValue>}` suffix in the declaration tells the UnrealScript compiler to simply generate an entirely different native type
-instead of using `Map_Mirror`.
+The `{TMap<FName, FUnitValue>}` suffix in the declaration tells the UnrealScript compiler to simply generate an declaration with an entirely
+different native type instead of using `Map_Mirror`.
 
 ### Booleans
 
@@ -284,7 +284,7 @@ It turns out that functions do something extremely similar to classes. All funct
 
 ![function property data visualization](/img/properties/properties_func.png)
 
-Both function arguments and local properties are part of the *stack frame* -- a data block allocated for all these properties.
+Both function arguments and local properties are part of the *stack frame* -- a data block allocated for all these properties upon calling the function.
 The out parameter is not present in this data block because out parameters live somewhere else -- the entire point of out parameters
 is to skip the part where the data needs to be copied to the stack frame and back; and the code directly writes to the borrowed storage location.
 
