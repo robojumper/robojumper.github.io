@@ -51,7 +51,7 @@ corresponding to the UnrealScript types:
 * Reference types like Object, Interface, Delegate
 
 We can make a reverse observation: All properties have an owner!
-This code snippets exhibits the three kinds of property owners UnrealScript has:
+This code snippet exhibits the three kinds of property owners UnrealScript has:
 
 * Classes
 * Structs
@@ -244,7 +244,7 @@ struct Map_Mirror
 
 Wow! That's a lot! All of this is necessary to exactly *mirror* the C++ data layout. All properties are `const` to prevent UnrealScript from
 mucking with native data structures, while C++ code can freely work with this map. Notably, these structs are kept in sync manually:
-The `{TMap<FName, FUnitValue>}` suffix in the declaration tells the UnrealScript compiler to simply generate an declaration with an entirely
+The `{TMap<FName, FUnitValue>}` suffix in the declaration tells the UnrealScript compiler to simply generate a declaration with an entirely
 different native type instead of using `Map_Mirror`.
 
 ### Booleans

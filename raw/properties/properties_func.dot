@@ -33,11 +33,11 @@ digraph props {
     prop3 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
         <td border="1">Tmp</td>
         <td border="1">Arity: 1</td>
-        <td border="1">Offset: 16</td>
+        <td border="1">Offset: 12</td>
     </tr></table>>];
     prop4 [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
         <td border="1">RetValue</td>
-        <td border="1">Offset: 20</td>
+        <td border="1">Offset: 16</td>
         <td border="1">PackIdx: 0</td>
     </tr></table>>];
     
@@ -46,14 +46,12 @@ digraph props {
         <td border="1">Data</td>
         <td bgcolor="pink" border="1">XComUnitPawn</td>
         <td bgcolor="pink" border="1">673</td>
-        <td border="1"></td>
         <td bgcolor="pink" border="1">0.0f</td>
         <td bgcolor="pink" border="1">false</td>
     </tr><tr>
         <td border="1">Size</td>
         <td border="1">8</td>
         <td border="1">4</td>
-        <td border="1">4 (padding)</td>
         <td border="1">4</td>
         <td border="1">4</td>
     </tr></table>>];
