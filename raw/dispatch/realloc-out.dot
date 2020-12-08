@@ -1,0 +1,27 @@
+digraph props {
+    bgcolor="#fffffd";
+    node [shape=record];
+    
+    arr [shape = none, style=filled, fillcolor=lightblue, xlabel = "TheArray", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p0" border="1">&lt;pointer&gt;</td>
+        <td port="p1" border="1">2</td>
+    </tr></table>>];
+    data [shape = none, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="el0" bgcolor="pink" border="1">1</td>
+        <td bgcolor="pink" border="1">3</td>
+    </tr></table>>];
+
+    out [shape = none, style=filled, fillcolor=lightblue, xlabel = "SomeInt", label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="p0" border="1">&lt;pointer&gt;</td>
+    </tr></table>>];
+
+    { rank = same; data;
+    olddata [shape = none, color=grey, fontcolor=grey, label = <<table border="0" cellspacing="0" cellpadding="9"><tr>
+        <td port="el0" border="1">1</td>
+    </tr></table>>];
+    }
+
+    "arr":p0 -> "data":el0;
+    "arr":p0 -> "olddata":el0 [style=dashed, color=grey];
+    "out" -> "olddata":el0;
+}
