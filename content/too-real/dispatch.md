@@ -101,6 +101,8 @@ Basically all functions in `Object.uc` are `final`.
 ### Delegates
 
 Delegates always link to a concrete function and object, so there's no name lookup involved when calling through a delegate.
+Still, it's more expensive than calling a final function directly because we need to retrieve the delegate property data first,
+which requires more pointer accesses.
 
 ## The Stack Frame
 
