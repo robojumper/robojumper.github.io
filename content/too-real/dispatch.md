@@ -88,7 +88,7 @@ final function SubFunction2() { }
 * Virtual dispatch: 30ns / call
 * Non-virtual dispatch: 20.2ns / call
 
-A `private` function is always `final`. Since `private` functions are entirely visible to outside classes and subclasses,
+A `private` function is always `final`. Since `private` functions are entirely invisible to outside classes and subclasses,
 they also don't need virtual dispatch.
 
 {{< interjection kind="advice" >}}
