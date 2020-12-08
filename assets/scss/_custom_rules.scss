@@ -22,8 +22,16 @@ body[data-theme='dark'] .advice.interjection {
 	background-color: rgb(33, 80, 33);
 }
 
-body[data-theme='auto'] .advice.interjection {
-	background-color: rgb(214, 255, 214);
+@media (prefers-color-scheme: dark) {
+	body[data-theme='auto'] .advice.interjection {
+		background-color: rgb(33, 80, 33);
+	}
+}
+
+@media (prefers-color-scheme: light) {
+	body[data-theme='auto'] .advice.interjection {
+		background-color: rgb(214, 255, 214);
+	}
 }
 
 body[data-theme='light'] .advice.interjection {
