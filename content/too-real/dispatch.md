@@ -135,7 +135,7 @@ With a baseline of no locals, the overhead of locals can be determined:
 * Baseline (no locals): 20.8ns / call
 * Small (1 int local): 57.0ns / call
 * Medium (8 int locals): 58.9ns / call
-* Large (8 int locals): 62.4ns / call
+* Large (32 int locals): 62.4ns / call
 
 Turns out that without any locals, the UnrealScript virtual machine needs to allocate no stack frame
 at all, so it's reasonably cheap. Once we have any local variables, we need to allocate space for
@@ -200,7 +200,7 @@ function Evil(out int SomeInt) {
 ```
 
 If we remember anything from last week's blog post, it's that arrays store their elements on a separate allocation.
-By adding an element while holding a pointer to another element, the array would re-allocated and we could access freed memory
+By adding an element while holding a pointer to another element, the array would re-allocate and we could access freed memory
 in the line commented with ⚡:
 
 ![use-after-free visualization](/img/dispatch/realloc-out.png)

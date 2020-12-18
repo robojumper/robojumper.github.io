@@ -42,7 +42,7 @@ function bool CheckCondition(Actor ChkObject, int Fact, out string Dbg) {
 }
 ```
 
-I've marked all properties with comments. The code snippets demonstrates that there are different kinds of properties,
+I've marked all properties with comments. The code snippet demonstrates that there are different kinds of properties,
 corresponding to the UnrealScript types:
 
 * Primitive types like Byte/Enum, Int, Bool, Float, Name
@@ -144,7 +144,7 @@ struct FSomeStruct
     TArray<INT> ChangeCounters;
 };
 
-class UMyClass : public Object
+class UMyClass : public UObject
 {
 public:
     //## BEGIN PROPS MyClass
