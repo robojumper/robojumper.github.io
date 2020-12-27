@@ -268,7 +268,7 @@ This is, of course, not a violation of MVC. We factored all of these aspects int
 
 ### Archived
 
-Our approach to the History has the problem of unlimited growth. With every mission, our save files contains more and more objects,
+Our approach to the History has the problem of unlimited growth. With every mission, our save file contains more and more objects,
 and more and more versions of the same object. This would spiral out of control quickly. Firaxis employs a number of mitigations.
 
 **TacticalTransient** objects are never retained after the end of a tactical mission. This includes ability states, effect states, and players.
