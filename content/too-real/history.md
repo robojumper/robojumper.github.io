@@ -419,7 +419,7 @@ Sometimes map actors like to self-destruct right after confirming an action, but
 
 Pixel hunting is the XCOM player's favorite obsession. Unsurprisingly, grenades and heavy weapons allow freely targeting the ability on
 the tactical map, so the game rules don't actually provide a list of all available actions and leave it to the players, which mostly
-results in the AI hitting seemingly (and sometimes actually impossible) shots -- players create the target for cursor-targeted abilities
+results in the AI hitting seemingly (and sometimes actually) impossible shots -- players create the target for cursor-targeted abilities
 on the fly and there's no validation.
 
 On top of that, some targeting methods actually use info from the unit pawn to build the heavy weapon path, particularly around
