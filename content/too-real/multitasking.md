@@ -114,7 +114,7 @@ At the same time, we clearly kick off the tile scoring task and it's done at som
 
 {{< interjection kind="info" >}}
 This illustrates the difference between concurrency and parallelism. Parallelism happens when two tasks make progress at the same time,
-concurrency allows tasks to make start and complete in overlapping time periods even though only one task can make progress at a time.<p />
+concurrency allows tasks to start and complete in overlapping time periods even though only one task can make progress at a time.<p />
 {{< /interjection >}}
 
 This can only work because the AI system is built with the ability to wait for results in the first place, and wouldn't work
