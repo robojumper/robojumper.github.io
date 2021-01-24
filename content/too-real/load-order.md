@@ -103,10 +103,15 @@ guaranteed parts of the order:
 
 It is obvious that base-game config is loaded first. DLCs happen to be loaded after that, and then it's mod directories.
 The game knows of the mod directories through a config array `ModRootDirs` in `XComEngine.ini`, and it turns out that the
-order there determines whether workshop mods or local mods are loaded first! Within these orders, there are different rules:
+order there determines whether workshop mods or local mods are loaded first!
+Within these orders, mods are loaded alphabetically by their folder name.[^alpha]
 
-* Workshop directories load order is unclear and believed to be either based on workshop ID or subscription date
-* Mod directories are loaded alphabetically[^alpha]
+In the workshop directory, these folder names correspond to the strictly monotonically increasing UGC (Steam user-generated content) IDs.
+This does not mean mods uploaded later load later -- in fact, mods with the IDs 20, 100 and 101 will be loaded in the order
+100, 101, 20 due to how the lexicographic comparison of folder names works.
+
+Of course, the simple act of moving a workshop folder to the local mods folder (for local development or in order to prevent updates)
+changes everything.
 
 {{< interjection kind="advice" >}}
 A common misconception is that the order of the `ActiveMods` in `XComModOptions.ini` determines config load order. For the
