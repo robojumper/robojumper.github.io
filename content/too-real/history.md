@@ -29,7 +29,7 @@ We give the player a direct presentation and intuitive understanding of the stat
 
 Everything is going great! The prototype advances rapidly, plenty of bugs crop up, plenty of bugs are fixed. And yet,
 some particular bugs seem to happen more frequently. There are reports of the grappling hook causing its users to fall
-through the floor under rare circumstances. Multiplayer gameplay performs some actions twice, or not at all. We miss 100% shots.
+through the floor under rare circumstances. Multiplayer gameplay performs some actions twice, or not at all. [We miss 100% shots.](https://www.reddit.com/r/Xcom/comments/3n4n9k/lw_something_is_seriously_off_with_the_to_hit_for/cvl6a70/)
 
 Worse, we don't really know how to reproduce and fix these problems -- perhaps not even what part of the engine or content
 is responsible! Do our maps have holes in them so that soldiers fall through? Is the physics engine buggy, or are the
