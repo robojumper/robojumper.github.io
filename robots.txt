@@ -1,0 +1,3 @@
+User-agent: *
+
+Sitemap: https://robojumper.github.io/sitemap.xml
