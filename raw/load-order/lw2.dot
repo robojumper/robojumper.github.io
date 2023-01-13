@@ -2,53 +2,53 @@ digraph lw2 {
     bgcolor="#fffffd";
     node [shape=box style=filled fillcolor="lightblue"];
 
-	LW_Tuple -> LW_Overhaul;
-	LW_Tuple -> LW_XModBase;
-	LW_Tuple -> XModBase_Core_2_0_2;
-	LW_Tuple -> XModBase_Interfaces;
+	LW_Overhaul -> LW_Tuple;
+	LW_XModBase -> LW_Tuple;
+	XModBase_Core_2_0_2 -> LW_Tuple;
+	XModBase_Interfaces -> LW_Tuple;
 
-	XModBase_Interfaces -> LW_XModBase;
-	XModBase_Interfaces -> XModBase_Core_2_0_2;
+	LW_XModBase -> XModBase_Interfaces;
+	XModBase_Core_2_0_2 -> XModBase_Interfaces;
 
-	XModBase_Core_2_0_2 -> LW_XModBase;
+	LW_XModBase -> XModBase_Core_2_0_2;
 
-	LW_XModBase -> LW_PerkPack_Integrated;
-	LW_XModBase -> LW_FactionBalance;
+	LW_PerkPack_Integrated -> LW_XModBase;
+	LW_FactionBalance -> LW_XModBase;
 
 	WallClimbOverride;
 
-	LW_Utilities -> LW_FactionBalance;
-	LW_Utilities -> LW_Overhaul;
-	LW_Utilities -> LW_PerkPack_Integrated;
-	LW_Utilities -> LW_Toolbox_Integrated;
+	LW_FactionBalance -> LW_Utilities;
+	LW_Overhaul -> LW_Utilities;
+	LW_PerkPack_Integrated -> LW_Utilities;
+	LW_Toolbox_Integrated -> LW_Utilities;
 
-	ModConfigMenuAPI -> PI_Integrated;
+	PI_Integrated -> ModConfigMenuAPI;
 
-	LW_XCGS_ModOptions -> LW_Overhaul;
-	LW_XCGS_ModOptions -> LW_PerkPack_Integrated;
-	LW_XCGS_ModOptions -> LW_Toolbox_Integrated;
-	LW_XCGS_ModOptions -> LW_XCGS_ToolboxOptions;
+	LW_Overhaul -> LW_XCGS_ModOptions;
+	LW_PerkPack_Integrated -> LW_XCGS_ModOptions;
+	LW_Toolbox_Integrated -> LW_XCGS_ModOptions;
+	LW_XCGS_ToolboxOptions -> LW_XCGS_ModOptions;
 
-	LW_XCGS_ToolboxOptions -> LW_Toolbox_Integrated;
-	LW_XCGS_ToolboxOptions -> LW_Overhaul;
+	LW_Toolbox_Integrated -> LW_XCGS_ToolboxOptions;
+	LW_Overhaul -> LW_XCGS_ToolboxOptions;
 
-	LW_SMGPack_Integrated -> LW_Overhaul;
-	LW_SMGPack_Integrated -> LW_AlienPack_Integrated;
-	LW_SMGPack_Integrated -> LW_WeaponsAndArmor;
+	LW_Overhaul -> LW_SMGPack_Integrated;
+	LW_AlienPack_Integrated -> LW_SMGPack_Integrated;
+	LW_WeaponsAndArmor -> LW_SMGPack_Integrated;
 
-	LW_LaserPack_Integrated -> LW_Overhaul;
+	LW_Overhaul -> LW_LaserPack_Integrated;
 
-	NewPromotionScreenByDefault_Integrated -> LW_Overhaul;
+	LW_Overhaul -> NewPromotionScreenByDefault_Integrated;
 
-	LW_PerkPack_Integrated -> LW_AlienPack_Integrated;
-	LW_PerkPack_Integrated -> LW_FactionBalance;
-	LW_PerkPack_Integrated -> LW_OfficerPack_Integrated;
-	LW_PerkPack_Integrated -> LW_Overhaul;
-	LW_PerkPack_Integrated -> LW_WeaponsAndArmor;
+	LW_AlienPack_Integrated -> LW_PerkPack_Integrated;
+	LW_FactionBalance -> LW_PerkPack_Integrated;
+	LW_OfficerPack_Integrated -> LW_PerkPack_Integrated;
+	LW_Overhaul -> LW_PerkPack_Integrated;
+	LW_WeaponsAndArmor -> LW_PerkPack_Integrated;
 
-	LW_OfficerPack_Integrated -> LW_Overhaul;
+	LW_Overhaul -> LW_OfficerPack_Integrated;
 
-	LW_AlienPack_Integrated -> LW_Overhaul;
+	LW_Overhaul -> LW_AlienPack_Integrated;
 
-	LW_Toolbox_Integrated -> LW_Overhaul;
+	LW_Overhaul -> LW_Toolbox_Integrated;
 }

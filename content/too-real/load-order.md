@@ -185,7 +185,7 @@ it probably has the most complex dependency graph:
 ![dependency graph lwotc](/img/load-order/lw2.png)
 
 This dependency graph is a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) (DAG): The edges are *directed*
-(an edge from A to B means B depends on A, but not the other way around) and the nodes are *acyclic* (there aren't any cycles).
+(an edge from A to B means A depends on B, but not the other way around) and the nodes are *acyclic* (there aren't any cycles).
 
 Cycles are impossible because script packages are compiled and loaded one after another, but now we need to find out a good order for
 our packages to be compiled and loaded in.
@@ -194,7 +194,7 @@ our packages to be compiled and loaded in.
 * If the packages are loaded in the wrong order at run-time,
 the game will have incredible bugs arising from certain classes and functions missing from the loaded UnrealScript bytecode.
 
-The requirement for our `NonNativePackages` order is that if there is an edge from `A -> B`, then A must come before B in the order. Such an order
+The requirement for our `NonNativePackages` order is that if there is an edge from `A -> B`, then B must come before A in the order. Such an order
 is called a [topological ordering](https://en.wikipedia.org/wiki/Topological_sorting), always exists for a DAG, and one such ordering can be found
 -- unsurprisingly -- in LWotC's `XComEngine.ini`
 
