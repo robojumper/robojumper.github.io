@@ -1,0 +1,194 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name=HandheldFriendly content="True"><meta http-equiv=x-ua-compatible content="IE=edge"><meta http-equiv=cache-control content="no-transform"><meta http-equiv=cache-control content="no-siteapp"><meta name=generator content="Hugo 0.119.0"><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><title>Multitasking - Too Real</title><meta name=author content="robojumper"><meta name=description content="About the Unreal Engine and XCOM 2 modding."><meta name=keywords content="unrealscript,xcom2"><meta property="og:title" content="Multitasking"><meta name=twitter:title content="Multitasking"><meta property="og:type" content="article"><meta property="og:url" content="https://robojumper.github.io/too-real/multitasking/"><meta property="og:description" content="This article explains the different kinds of parallelism and concurrency happening in XCOM 2 and UnrealScript despite the engine&rsquo;s single-threaded nature&mldr;"><meta name=twitter:description content="This article explains the different kinds of parallelism and concurrency happening in XCOM 2 and UnrealScript despite the engine&rsquo;s single-threaded nature&mldr;"><meta name=twitter:card content="summary"><meta property="article:published_time" content="2020-11-10T17:45:00+01:00"><meta property="article:modified_time" content="2020-11-10T17:45:00+01:00"><style>@media(prefers-color-scheme:dark){body[data-theme=auto] img{filter:brightness(60%)}}body[data-theme=dark] img{filter:brightness(60%)}</style><link rel=stylesheet href=https://robojumper.github.io/assets/css/fuji.min.css></head><body data-theme=auto data-theme-auto=false><script data-cfasync=false>var fujiThemeData=localStorage.getItem("fuji_data-theme");fujiThemeData?fujiThemeData!=="auto"&&document.body.setAttribute("data-theme",fujiThemeData==="dark"?"dark":"light"):localStorage.setItem("fuji_data-theme","auto")</script><header><div class="container-lg clearfix"><div class="col-12 header"><a class=title-main href=https://robojumper.github.io>Too Real</a>
+<span class=title-sub>About the Unreal Engine and XCOM 2 modding.</span></div></div></header><main><div class="container-lg clearfix"><div class="col-12 col-md-9 float-left content"><article><h2 class="post-item post-title"><a href=https://robojumper.github.io/too-real/multitasking/>Multitasking</a></h2><div class="post-item post-meta"><span><i class="iconfont icon-today-sharp"></i>&nbsp;2020-11-10</span>
+<span><i class="iconfont icon-time-sharp"></i>&nbsp;13 minutes</span>
+<span><i class="iconfont icon-pricetags-sharp"></i>&nbsp;<a href=/tags/unrealscript>unrealscript</a>&nbsp;<a href=/tags/xcom2>xcom2</a>&nbsp;</span></div><div class="post-content markdown-body"><p>It&rsquo;s common wisdom that &ldquo;the Unreal Engine 3 is single-threaded&rdquo;. Despite that, there are some less and some more surprising sources
+of parallelism that can happen in UnrealScript, particularly XCOM 2.</p><p>In this post, we&rsquo;ll first look at how one frame in the Unreal Engine 3 works (in particular, actor and component ticking) and
+the kind of parallelism happening there, and then move over to some more sources of concurrency and parallelism.</p><h2 id=what-happens-in-a-frame>What happens in a frame</h2><p>Before we can talk about what happens in parallel, we need to establish what actually happens in a single frame.
+On a very high level, most games have a <em>game loop</em> that looks something like Input->Gameplay->Render:</p><p><img class=img-zoomable src=/img/multitasking/loop.png alt="visualization of generic game loop"></p><p>The Unreal Engine 3 documentation offers bullet points about its internal workings,<sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup> here&rsquo;s that information
+in form of a graph:</p><p><img class=img-zoomable src=/img/multitasking/frame.png alt="visualization of UE3 game loop"></p><p>It turns out there are actually three different ticks in the engine &ndash; one tick running before physics, one tick running together with
+physics, one tick after physics. Every actor ticks in one of these groups unless the game is paused; input is usually handled before physics.
+All these ticks receive an argument <code>DeltaTime</code>, passing the passed world time in seconds since the last tick.</p><div><div class="interjection info"><p>This world time is not real time! The engine can run in slow-motion or fast-forward by scaling this DeltaTime down or up,
+try the console command <code>slomo 2</code> for faster tactical gameplay.</p><p>Pause is not <code>slomo 0</code>! In pause, most actors don&rsquo;t tick at all. <code>slomo</code> has a minimum scale of x0.1.</p></div></div><p><h3 id=physics>Physics</h3><p>Not only the input, almost all things tick before physics by default:<sup id=fnref:2><a href=#fn:2 class=footnote-ref role=doc-noteref>2</a></sup></p><pre><code class=language-java>defaultproperties
+{
+	// For safety, make everything before the async work. Move actors to
+	// the during group one at a time to find bugs.
+	TickGroup=TG_PreAsyncWork
+}
+</code></pre><p>It makes sense to run most gameplay ticks before physics to give physics an opportunity to immediately react to changes from gameplay.</p><p>At the same time, some things <em>must</em> run after physics, for example camera positioning. If the camera positioned itself before
+physics and physics then moved the object the camera was focusing on, the camera would lag behind by one entire frame (up to 30ms at 30 FPS).</p><p>And then, there&rsquo;s code that can run safely in parallel with physics without any issues. This is a performance optimization: On any machine
+with more than one CPU core, running more things in parallel with physics is &ldquo;free&rdquo; as long as physics are more expensive.</p><p>This is helped by the fact that the actual physics update runs no UnrealScript code at all, so the engine doesn&rsquo;t immediately explode when
+it runs UnrealScript code together with physics. On the other hand, UnrealScript code running <code>TG_DuringAsyncWork</code> should not access any variables
+touched by physics, which would cause unpredictable behavior in face of incomplete results.<p></p><div><div class="interjection info"><p>Very few things actually use <code>TG_DuringAsyncWork</code>, mostly because it&rsquo;d be surprising and premature optimization is the root of all evil.<p></p></div></div><p><p>All code that doesn&rsquo;t run in parallel with physics <em>blocks</em> the entire game loop. For example, if the AI decides to move a unit
+(somewhere in the Pre-Async Tick), it needs to select an appropriate tile &ndash; from a list of potentially hundreds of tiles!
+This <em>scoring</em> of tiles takes quite a bit of time and for the entire duration of that loop, nothing in the game can make progress.
+The longer this takes, the more noticeable the arising short lag spike.</p><div><div class="interjection info"><p>Games are <a href=https://en.wikipedia.org/wiki/Real-time_computing target=_blank>real-time programs</a>. Depending on the desired frame rate, there is a
+<em>soft deadline</em> of 33ms (30 FPS), 17ms (60 FPS), or 7ms (144 FPS). When the total computations for a single frame take longer than that,
+we miss the deadline. This doesn&rsquo;t cause any problems with the hardware, but it degrades the quality of the service.<p></p></div></div><p><h2 id=cooperative-multitasking>Cooperative Multitasking</h2><h3 id=splitting-work>Splitting Work</h3><p>The UnrealScript implementation of tile scoring manages about 30 tiles per millisecond on my Intel Core i5-3470 @ 3.20GHz.
+However, several hundred target tiles aren&rsquo;t unusual: Even the earliest units in the game (with a comparatively low mobility)
+have about 60 target tiles in a wide single-level Gatecrasher map. Terror missions with high-mobility units, several building floors
+and complex cover situations can make this a whole lot more expensive.</p><p>On the other hand, tile scoring isn&rsquo;t urgent. It&rsquo;s totally fine to only score a few tiles in one frame, a few in the next frame,
+and so on until it&rsquo;s done:</p><pre><code class=language-java>function StartScoringTiles()
+{
+	TilesToScore = //... retrieve tiles list from native cache
+	IsScoringTiles = true;
+}
+
+event Tick(float DeltaTime)
+{
+	super.Tick(DeltaTime);
+	if (IsScoringTiles)
+	{
+		// Score 50 tiles...
+	}
+
+	if (TilesToScore.Length == 0)
+	{
+		IsScoringTiles = false;
+	}
+}
+</code></pre><p>There is no parallelism going on. Every frame, we spend most of our time on &ldquo;the usual&rdquo;, and a little bit of time on tile scoring.
+At the same time, we clearly kick off the tile scoring task and it&rsquo;s done at some later point without blocking on its completion.</p><div><div class="interjection info"><p>This illustrates the difference between concurrency and parallelism. Parallelism happens when two tasks make progress at the same time,
+concurrency allows tasks to start and complete in overlapping time periods even though only one task can make progress at a time.<p></p></div></div><p><p>This can only work because the AI system is built with the ability to wait for results in the first place, and wouldn&rsquo;t work
+if it immediately demanded results. We call this <em>cooperative multi-tasking</em> because our code needs to explicitly stop doing its work
+for other code to resume.</p><h3 id=timers>Timers</h3><p>This works great, but has the small problem that our <code>Tick</code> function becomes a bit overcrowded. We have to remember to call
+<code>super.Tick(DeltaTime)</code>, and for every task we could ever run, our <code>Tick</code> function becomes lengthier. We can fix this by using native timers:</p><pre><code class=language-java>function StartScoringTiles()
+{
+	TilesToScore = //... retrieve tiles list from native cache
+	IsScoringTiles = true;
+	SetTimer(0.001f, false, nameof(ScoreTiles)); // Set non-repeating timer in 1ms
+}
+
+function ScoreTiles()
+{
+	// Score 50 tiles...
+
+	if (TilesToScore.Length &gt; 0)
+	{
+		SetTimer(0.001f, false, nameof(ScoreTiles)); // Queue another 50 tiles
+	}
+	else
+	{
+		IsScoringTiles = false;
+	}
+}
+</code></pre><p>This keeps our <code>Tick</code> function tidy and our deadlines happy.</p><h3 id=async-loading>Async loading</h3><p>This is basically what the game does when asynchronously loading objects in the background. Every frame, the Unreal Engine 3
+dedicates at most 5 milliseconds to background loading.</p><p>This makes our loading performance (as well as our earlier AI calculations) dependent on the frame rate.
+We can calculate the loading efficiency (percentage of time spent on loading; performing a blocking load would be 100%):</p><table><thead><tr><th>Regular frame rate</th><th>Async-loading frame rate</th><th>Loading Efficiency</th></tr></thead><tbody><tr><td>30 FPS</td><td>26.1 FPS</td><td>13%</td></tr><tr><td>60 FPS</td><td>46.2 FPS</td><td>23%</td></tr><tr><td>144 FPS</td><td>83.7 FPS</td><td>42%</td></tr><tr><td>→ ∞ FPS</td><td>200 FPS</td><td>100%</td></tr></tbody></table><p>XCOM 2 (vanilla) uses async loading for the entire tactical map while viewing the dropship. On a machine that manages about 30 FPS
+in the dropship (no matter whether CPU or GPU performance is to blame), the tactical map takes more than seven times as long to load
+than would be necessary.</p><p>War of the Chosen shows a black screen while loading the map, which brings us close to the optimal performance and speeds up the
+tactical transition by a factor of 7 on low-end machines!</p><h3 id=state-code>State code</h3><p>In the example we&rsquo;ve looked at before, we had a task that is computationally expensive but easy to split up. It turns out that there is
+also the opposite kind of task: A task that is complex enough to not be trivially breakable, but spends a lot of time just waiting.</p><p>One such example is the code that sets up the tactical session. We have to wait for the UI to be ready, then do a bit of setup,
+then wait for the dropship to be ready, wait for the plot to load in, wait for the map to generate,
+wait for the map pieces to load in, wait for the mission intro to finish, and then we can start the actual battle:<sup id=fnref:3><a href=#fn:3 class=footnote-ref role=doc-noteref>3</a></sup></p><pre><code class=language-java>state CreateTacticalGame
+{
+Begin:
+	while (UIBusy())
+	{
+		Sleep(0.0f);
+	}
+	
+	StartLoadingDropship();
+	while (DropshipLoading())
+	{
+		Sleep(0.0f);
+	}
+	ShowDropship();
+
+	StartLoadingMap();
+	while (MapLoading())
+	{
+		Sleep(0.0f);
+	}
+	HideDropship();
+
+	BuildMapData();
+	SpawnUnits();
+
+	while (MissionIntroPlaying())
+	{
+		Sleep(0.0f);
+	}
+
+	GotoState('TurnPhase_Begin');
+}
+</code></pre><p><a href=https://docs.unrealengine.com/udk/Three/UnrealScriptStates.html target=_blank>State code</a> is allowed in Actors and automatically executed when the actor ticks.
+<code>Sleep</code> is a <em>latent function</em>: When we call it, the UnrealScript virtual machine saves that the Actor was in that particular state and called that
+function, <em>returns from state code execution</em>, and checks again next frame.</p><p>A <code>Sleep(0.0f)</code> immediately resumes execution the next frame &ndash; upon which our loops just check the condition again and go to
+sleep if not met. Implemented with functions and timers, this would be spread across over 10 functions.</p><div><div class="interjection info"><p>Latent functions are actually return statements in disguise: They return upon calling them and continue execution at some point in the future.<p></p></div></div><p><p>State code is also often used with Actions and the animation system &ndash; Pawns have a latent <code>FinishAnim</code> function that plays an animation
+and resumes execution when the animation has played. Here is a simplified copy of the Grapple action:</p><pre><code class=language-java>state Executing
+{
+Begin:
+	UnitPawn.StartAnim('NO_GrappleFire');
+	while( ProjectileHit == false )
+	{
+		Sleep(0.0f);
+	}
+
+	// Have an emphasis on seeing the grapple tight
+	Sleep(0.1f);
+
+	UnitPawn.StartAnim('NO_GrappleStart');
+
+	while( !ReachedTarget() )
+	{
+		if( !UnitPawn.PlayingAnim() )
+		{
+			break;
+		}
+
+		Sleep(0.0f);
+	}
+
+	// send messages to do the window break visualization
+	SendWindowBreakNotifies();
+	FinishAnim(UnitPawn.PlayAnim('NO_GrappleStop'));
+
+	CompleteAction();
+}
+</code></pre><p>The <code>XComIdleAnimationStateMachine</code>, also making use of state code, has a function <code>TurnTowardsPosition</code><sup id=fnref:4><a href=#fn:4 class=footnote-ref role=doc-noteref>4</a></sup>
+that only resumes execution in that state when the animation system has driven the pawn to turn towards a position. This can take
+several seconds in world time.</p><p>Remember how I said latent functions are return statements in disguise? There&rsquo;s not really a way to save something in locals for us to use
+<em>after we call return</em>, so state code can&rsquo;t have local variables. Code between latent function calls can be factored
+out into regular functions with locals, but state saved across latent function calls must be saved in class variables.</p><div><div class="interjection info"><p>Other programming languages like <a href=https://en.cppreference.com/w/cpp/language/coroutines target=_blank>C++</a>, <a href=https://docs.unity3d.com/Manual/Coroutines.html target=_blank>C#</a>, <a href=https://docs.python.org/3/library/asyncio-task.html target=_blank>Python</a>, <a href=https://github.com/rust-lang/rfcs/blob/master/text/2033-experimental-coroutines.md target=_blank>Rust</a> and many more call this programming paradigm <em>stackless <a href=https://en.wikipedia.org/wiki/Coroutine target=_blank>coroutines</a></em>.
+Relevant keywords are <code>async</code>, <code>await</code>, <code>generator</code>, <code>yield</code>.</p><p>Most programming languages automatically derive the state saved across <em>yield points</em> (which latent function calls are) and save
+them in an anonymous object. UnrealScript is rather simplistic, that&rsquo;s why locals in state code aren&rsquo;t allowed.</p></div></div><p><h2 id=preemptive-multitasking>Preemptive Multitasking</h2><p>Sometimes cooperative multitasking isn&rsquo;t a viable solution &ndash; either because we can&rsquo;t rely on other code cooperating with important code,
+or because the task itself doesn&rsquo;t have predictable yield points.</p><h3 id=audio>Audio</h3><p>The Audio mentioned in the game loop diagram is Unreal Engine 3&rsquo;s audio (<code>SoundCues</code>) and notably does not run in parallel with anything.
+If a frame takes a bit too long, the audio backend runs out of audio data to&mldr; convert into sound<sup id=fnref:5><a href=#fn:5 class=footnote-ref role=doc-noteref>5</a></sup> and the audio starts stuttering.</p><p>This is because the audio system does a little bit of work every frame (to fill the audio buffers), but it can&rsquo;t defend against other tasks
+taking too long when it&rsquo;s part of the game loop.</p><p>XCOM 2 solves this problem by using a custom audio middleware called <em>Wwise</em>, which runs on an entirely different operating system thread and only exchanges
+simple events and messages with the game loop. This allows it to make sound without waiting for audio data by running in parallel with the game code.</p><p>The operating system has a <em>scheduler</em> that regularly switches between the threads that a process has spawned (or runs several of them in parallel)
+and ensures that all threads &ndash; including the main thread and the audio thread &ndash; can do their work. Pausing a thread this way, without cooperation,
+is called <em>preemption</em>; switching to another thread requires a <em>context switch</em>.</p><div><div class="interjection info"><p>The operating system is pretty powerful. It will save the call stack and CPU registers so that the thread can resume
+the next time from the exact point it was preempted. The same mechanism also allows multiple processes to run on one machine
+&ndash; every process has at least one thread.<p></p></div></div><p><p>Physics also makes use of that functionality, with a small difference: Audio uses a thread that always runs for the entire runtime
+of the game, while the physics task is <em>joined</em> so that the main thread continues with Post-Async Tick only after physics are done.</p><div><div class="interjection advice"><p>Even though mod developers have no convenient way to author Wwise audio, music pieces should not be implemented with SoundCues
+because the stuttering is just awful.</p><p>If you&rsquo;re interested in using Wwise for music, nintendoeats adapted my Music Modding System to Wwise audio and
+<a href="https://steamcommunity.com/sharedfiles/filedetails/?id=1401366221" target=_blank>wrote a guide</a> for those wanting to make use of Wwise for music packs.</p></div></div><p><h3 id=game-states>Game states</h3><p>One of the most expensive kinds of calculations is building a new tactical game state, especially when it drags a long chain of events after it
+(consider a long movement triggering several reaction shots and environmental damage). We&rsquo;ve explored in a <a href=../history>previous blog post</a> how
+all game states are immediately built upon confirming the action. In the vanilla game, this most often causes a short but noticeable freeze upon
+confirming an ability, and a reduced frame rate and stuttering if AI reacts and builds game states in the frames after.</p><p>We can&rsquo;t really apply our previous solutions because cooperative multitasking requires our tasks to be able to easily yield control to the game loop
+at certain intervals. We just can&rsquo;t do this with game states &ndash; context and state submission are a recursive and unpredictable algorithm.
+Often we trigger certain events and every listener might decide to do whatever.</p><p>War of the Chosen changes game state submission so that when we submit a context, we perform building the game state (and all its response states)
+on a separate OS thread. We don&rsquo;t wait for it to be done, but once it&rsquo;s done, we can use the results.
+The History is enhanced with some thread-local data<sup id=fnref:6><a href=#fn:6 class=footnote-ref role=doc-noteref>6</a></sup> to allow the game state thread to access the currently built states,
+while the main thread still looks at the tip of the latest fully built event chain.</p><div><div class="interjection info"><p>I don&rsquo;t believe Firaxis enhanced the UnrealScript virtual machine to the point where two OS threads can run UnrealScript in parallel &ndash;
+many data structures and globals are not thread-safe, and employing locks would be a huge performance degradation.</p><p>My best guess is that even though we have several OS threads, only one of them is running UnrealScript at a time while
+the other is just parked by the OS. The engine could then switch off the game state thread at certain safe points like the end of statements.
+That way we get the state-saving logic for free from the OS without really implementing any cooperation.</p></div></div><p><p>The game&rsquo;s UI won&rsquo;t allow you to perform any other actions while a game state is being built, but it fixes the visual freeze. It also subverts
+one of our fundamental assumptions: At <strong>any point in tactical</strong>, a game state might be in flight on another thread.</p><div><div class="interjection advice"><p>If you write code that allows the user to initiate context or game state submissions in tactical, you must check that
+<code>`XCOMGAME.GameRuleset.IsDoingLatentSubmission()</code> returns false. Otherwise two threads will be building game states
+in parallel &ndash; a <em>race condition</em>.<p></p></div></div><p><h2 id=closing-words>Closing Words</h2><p>Turns out there&rsquo;s quite a bit of nuance to concurrency and parallelism in UnrealScript and XCOM 2. Even on the single main thread that
+runs the game loop, we can find ways to run tasks concurrently. I personally found it very interesting how early UnrealScript (in UE 2!) had
+coroutines, a functionality many other mainstream programming languages are only gaining today.</p><p>Of course, much of the Unreal Engine 3 remains single-threaded and cannot be parallelized in any way. Future, more efficient engines
+make more use of the several CPU cores every modern machine has, especially with single-core CPU performance plateauing.</p><div class=footnotes role=doc-endnotes><hr><ol><li id=fn:1><p>See <a href=https://docs.unrealengine.com/udk/Three/ActorTicking.html#Code%20Flow%20%28each%20frame%29 target=_blank>UDK | Actor Ticking</a>&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:2><p>See <code>Actor/defaultproperties</code>&#160;<a href=#fnref:2 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:3><p>See <code>X2TacticalGameRuleset.state'CreateTacticalGame'</code>&#160;<a href=#fnref:3 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:4><p>See <code>XComIdleAnimationStateMachine:TurnTowardsPosition</code>&#160;<a href=#fnref:4 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:5><p>There does not appear to be a word corresponding to &ldquo;visualize&rdquo; for audio.&#160;<a href=#fnref:5 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:6><p>See <code>XComGameStateHistory:LatentUpdateThreadID</code>&#160;<a href=#fnref:6 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li></ol></div></div></article><div class="license markdown-body"><blockquote><p>Unless otherwise noted, the content of this site is licensed under <a rel=license href=https://creativecommons.org/licenses/by/4.0/ target=_blank>CC BY</a>.</p></blockquote></div><div class=post-comment data-comment=utterances><span class=post-comment-notloaded><i class="iconfont icon-chatbox-ellipses-sharp"></i>&nbsp;Load comments</span>
+<script>function loadComment(){var e,n=document.querySelector(".post-comment"),t=document.body.getAttribute("data-theme");t==="auto"?t=window.matchMedia("(prefers-color-scheme: dark)").matches?"photon-dark":"github-light":t=t==="dark"?"photon-dark":"github-light",e=document.createElement("script"),e.src="https://utteranc.es/client.js",e.setAttribute("repo","robojumper/robojumper.github.io"),e.setAttribute("issue-term","pathname"),e.setAttribute("theme",t),e.setAttribute("crossorigin","anonymous"),e.setAttribute("async",""),document.querySelector(".post-comment").appendChild(e),document.querySelector("span.post-comment-notloaded").setAttribute("style","display: none;")}</script></div></div><aside class="col-12 col-md-3 float-left sidebar"><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#what-happens-in-a-frame>What happens in a frame</a><ul><li><a href=#physics>Physics</a></li></ul></li><li><a href=#cooperative-multitasking>Cooperative Multitasking</a><ul><li><a href=#splitting-work>Splitting Work</a></li><li><a href=#timers>Timers</a></li><li><a href=#async-loading>Async loading</a></li><li><a href=#state-code>State code</a></li></ul></li><li><a href=#preemptive-multitasking>Preemptive Multitasking</a><ul><li><a href=#audio>Audio</a></li><li><a href=#game-states>Game states</a></li></ul></li><li><a href=#closing-words>Closing Words</a></li></ul></nav></div></aside></div><div class=btn><div class=btn-menu id=btn-menu><i class="iconfont icon-grid-sharp"></i></div><div class=btn-toggle-mode><i class="iconfont icon-contrast-sharp"></i></div><div class=btn-scroll-top><i class="iconfont icon-chevron-up-circle-sharp"></i></div></div><aside class=sidebar-mobile style=display:none><div class=sidebar-wrapper><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#what-happens-in-a-frame>What happens in a frame</a><ul><li><a href=#physics>Physics</a></li></ul></li><li><a href=#cooperative-multitasking>Cooperative Multitasking</a><ul><li><a href=#splitting-work>Splitting Work</a></li><li><a href=#timers>Timers</a></li><li><a href=#async-loading>Async loading</a></li><li><a href=#state-code>State code</a></li></ul></li><li><a href=#preemptive-multitasking>Preemptive Multitasking</a><ul><li><a href=#audio>Audio</a></li><li><a href=#game-states>Game states</a></li></ul></li><li><a href=#closing-words>Closing Words</a></li></ul></nav></div></div></aside></main><footer><div class="container-lg clearfix"><div class="col-12 footer"><span>&copy; 2020-2023
+<a href=https://robojumper.github.io>robojumper</a>
+| <a href=https://github.com/robojumper/robojumper.github.io>Source code</a>
+| Powered by <a href=https://github.com/dsrkafuu/hugo-theme-fuji/ target=_blank>Fuji-v2</a> & <a href=https://gohugo.io/ target=_blank>Hugo</a></span></div></div></footer><script defer src=https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/components/prism-core.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/plugins/autoloader/prism-autoloader.min.js></script>
+<script defer src=/assets/js/fuji.min.js></script>
+<link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css><script defer src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js onload=renderMathInElement(document.body)></script></body></html>

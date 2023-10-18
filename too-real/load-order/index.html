@@ -1,0 +1,141 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name=HandheldFriendly content="True"><meta http-equiv=x-ua-compatible content="IE=edge"><meta http-equiv=cache-control content="no-transform"><meta http-equiv=cache-control content="no-siteapp"><meta name=generator content="Hugo 0.119.0"><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><title>Load Order - Too Real</title><meta name=author content="robojumper"><meta name=description content="About the Unreal Engine and XCOM 2 modding."><meta name=keywords content="unrealscript,xcom2"><meta property="og:title" content="Load Order"><meta name=twitter:title content="Load Order"><meta property="og:type" content="article"><meta property="og:url" content="https://robojumper.github.io/too-real/load-order/"><meta property="og:description" content="This article investigate what kinds of load orders there are in XCOM 2 and how to work with them&mldr;"><meta name=twitter:description content="This article investigate what kinds of load orders there are in XCOM 2 and how to work with them&mldr;"><meta name=twitter:card content="summary"><meta property="article:published_time" content="2020-11-17T17:45:00+01:00"><meta property="article:modified_time" content="2020-11-17T17:45:00+01:00"><style>@media(prefers-color-scheme:dark){body[data-theme=auto] img{filter:brightness(60%)}}body[data-theme=dark] img{filter:brightness(60%)}</style><link rel=stylesheet href=https://robojumper.github.io/assets/css/fuji.min.css></head><body data-theme=auto data-theme-auto=false><script data-cfasync=false>var fujiThemeData=localStorage.getItem("fuji_data-theme");fujiThemeData?fujiThemeData!=="auto"&&document.body.setAttribute("data-theme",fujiThemeData==="dark"?"dark":"light"):localStorage.setItem("fuji_data-theme","auto")</script><header><div class="container-lg clearfix"><div class="col-12 header"><a class=title-main href=https://robojumper.github.io>Too Real</a>
+<span class=title-sub>About the Unreal Engine and XCOM 2 modding.</span></div></div></header><main><div class="container-lg clearfix"><div class="col-12 col-md-9 float-left content"><article><h2 class="post-item post-title"><a href=https://robojumper.github.io/too-real/load-order/>Load Order</a></h2><div class="post-item post-meta"><span><i class="iconfont icon-today-sharp"></i>&nbsp;2020-11-17</span>
+<span><i class="iconfont icon-time-sharp"></i>&nbsp;9 minutes</span>
+<span><i class="iconfont icon-pricetags-sharp"></i>&nbsp;<a href=/tags/unrealscript>unrealscript</a>&nbsp;<a href=/tags/xcom2>xcom2</a>&nbsp;</span></div><div class="post-content markdown-body"><p>&ldquo;How do I fix my load order?&rdquo; ask many many XCOM 2 mod users, but there are several kinds of load orders, some of which are unreliable and can&rsquo;t
+even be changed. We&rsquo;re going to look at the different kinds of load orders, clear up some misconceptions, and see how they affect mod dependencies.</p><h2 id=config-files>Config files</h2><div><div class="interjection info"><p>The /r/xcom2mods wiki has a page <a href=https://www.reddit.com/r/xcom2mods/wiki/wotc_modding/config_files target=_blank>Configuration Files and Variables</a>
+that contains a more practical introduction to config files, troubleshooting advice and some mod interoperability tricks.<p></p></div></div><p><p>This is the most important and most impactful kind of load order. As a quick reminder, config files consist of key-value
+pairs (KVP) that are conceptually inserted into a multi-map (a key-values map where multiple values can correspond to one key).</p><p>We have access to some syntax translating to commands for the config map:</p><ul><li><code>Key=Value</code>: Set the entry <code>Key</code> to <code>Value</code></li><li><code>+Key=Value</code>: Add to entry <code>Key</code> the value <code>Value</code> if not present</li><li><code>.Key=Value</code>: Add to entry <code>Key</code> the value <code>Value</code></li><li><code>-Key=Value</code>: Remove from entry <code>Key</code> the value <code>Value</code> if present</li><li><code>!Key=()</code>: Clear entry <code>Key</code></li></ul><p>This is a strictly serial process. Config files and the lines within are processed in order.</p><div><div class="interjection info"><p>For base-game config files and files in the user directory (<code>Documents/My Games/XCOM 2 (WotC)/XComGame/Config</code>), <code>Key=Value</code>
+entries are interpreted as <code>+Key=Value</code>.<p></p></div></div><p><p>Only after all config files have been loaded, <code>config</code> variables are imbued with the values from the config map.
+How it precisely works depends on the kind of variable.</p><ul><li>Primitive types use the value inserted last</li><li>Static (fixed-size) arrays look for <code>VarName[0]</code>, <code>VarName[1]</code>, &mldr; keys and use the respective value inserted last</li><li>Arrays are special</li></ul><h3 id=array-indexing>Array indexing</h3><p><code>+VarName=...</code> and <code>VarName[_]=...</code> have no interaction at all. Several <code>+VarName=...</code> KVPs produce a key with multiple values,
+<code>VarName[_]=...</code> KVPs with different indices produce different keys.</p><p>Arrays look for the <code>VarName</code> key and insert all entries in order into the array. Only if <code>VarName</code> isn&rsquo;t found,
+they look for <code>VarName[0]</code>, <code>VarName[1]</code>, &mldr; keys, using the last inserted value, until one isn&rsquo;t found.</p><pre><code class=language-ini>+CArray=&quot;PlusZero&quot;
++CArray=&quot;PlusOne&quot;
+CArray[1]=&quot;AtOne&quot;
+; results in CArray = [&quot;PlusZero&quot;, &quot;PlusOne&quot;] in UnrealScript
+</code></pre><pre><code class=language-ini>CArray[0]=&quot;AtZero&quot;
+CArray[1]=&quot;AtOne&quot;
+CArray[3]=&quot;AtThree&quot;
+; results in CArray = [&quot;AtZero&quot;, &quot;AtOne&quot;] in UnrealScript
+</code></pre><div><div class="interjection info"><p>h4ilst0rm pointed out to me that for arrays in structs, skipped entries are filled with the default value, so if this array were part of
+a struct, <code>(CArray[0]="AtZero", CArray[1]="AtOne", CArray[3]="AtThree")</code> would result in <code>["AtZero", "AtOne", "", "AtThree"]</code>.<p></p></div></div><p><h3 id=textual-identity>Textual identity</h3><p>It&rsquo;s also a strictly textual process &ndash; the config parser has no knowledge of the actual types of the variables:</p><pre><code class=language-ini>+IArray=1
++IArray=01
++IArray=1
+; results in IArray = [1, 1] in UnrealScript
+</code></pre><pre><code class=language-ini>+SArray=(i=5)
++SArray=(i=6)
+-SArray=(i=5)
+-SArray=(i = 6)
+; results in SArray = [A { i = 6 }] in UnrealScript
+</code></pre><div><div class="interjection advice"><p>Minor formatting differences such as white-space, indentation, capitalization and leading zeros are relevant for the removal of entries.<p></p></div></div><p><h3 id=load-order>Load order</h3><p>Since single-value types use the last inserted entry, the config file processed last usually wins.
+But at the same time, if a certain approach relies on removing previous array entries, only the first
+processed mod has any chance to textually match an original entry. Config load order is important, and here&rsquo;s the
+guaranteed parts of the order:</p><ol><li>User directory (<code>Documents/My Games/XCOM 2 (WotC)/XComGame/Config</code>)</li><li>DLC directories (<code>XCOM 2/XCom2-WarOfTheChosen/XComGame/DLC/*/Config</code>)</li><li>Mod directories (<code>XCOM 2/XCom2-WarOfTheChosen/XComGame/Mods/*/Config</code> and <code>workshop/content/268500/*/Config</code>)</li></ol><p>It is obvious that base-game config is loaded first. DLCs happen to be loaded after that, and then it&rsquo;s mod directories.
+The game knows of the mod directories through a config array <code>ModRootDirs</code> in <code>XComEngine.ini</code>, and it turns out that the
+order there determines whether workshop mods or local mods are loaded first!
+Within these orders, mods are loaded alphabetically by their folder name.<sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup></p><p>In the workshop directory, these folder names correspond to the strictly monotonically increasing UGC (Steam user-generated content) IDs.
+This does not mean mods uploaded later load later &ndash; in fact, mods with the IDs 20, 100 and 101 will be loaded in the order
+100, 101, 20 due to how the lexicographic comparison of folder names works.</p><p>Of course, the simple act of moving a workshop folder to the local mods folder (for local development or in order to prevent updates)
+changes everything.</p><div><div class="interjection advice"><p>A common misconception is that the order of the <code>ActiveMods</code> in <code>XComModOptions.ini</code> determines config load order. For the
+longest time, the Alternative Mod Launcher had offered a &ldquo;load order&rdquo; column that affected only the <code>ActiveMods</code> array.</p><p>This is wrong. Config load order is rarely guaranteed and should not be relied on by mod authors.</p></div></div><p><h3 id=workarounds>Workarounds</h3><p>This causes a bunch of issues in practice. Some base-game config arrays use <code>VarName[_]=...</code> syntax, so mods cannot use the
+<code>+VarName</code> syntax to add to the array &ndash; and explicit indices would be incompatible with other mods. One example of this are
+ability availability codes &ndash; a <code>config</code> and a <code>localized</code> array that map a tactical condition error code to a user-displayed string.</p><p>It can be useful to modify these arrays from code: Declare copies of the arrays in your own class, fill them in from your private config
+files, then copy them over at runtime (code simplified from <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=1500499606" target=_blank>Rising Tides: The Program</a>):</p><pre><code class=language-java>var config array&lt;name&gt; NewAbilityAvailabilityCodes;
+var localized array&lt;String&gt; NewAbilityAvailabilityStrings;
+
+static event OnPostTemplatesCreated()
+{
+	local X2AbilityTemplateManager	AbilityTemplateManager;
+	local int						idx;
+
+	AbilityTemplateManager = X2AbilityTemplateManager(class'Engine'.static.FindClassDefaultObject(&quot;XComGame.X2AbilityTemplateManager&quot;));
+
+	// If there are more codes than strings, this inserts blank strings to bring them to equal before adding our new codes
+	// If there are more strings than codes, this cuts off the excess before adding our new codes
+	AbilityTemplateManager.AbilityAvailabilityStrings.Length = AbilityTemplateManager.AbilityAvailabilityCodes.Length;
+
+	// Append new codes and strings to the arrays
+	for (idx = 0; idx &lt; default.NewAbilityAvailabilityCodes.Length; idx++)
+	{
+		AbilityTemplateManager.AbilityAvailabilityCodes.AddItem(default.NewAbilityAvailabilityCodes[idx]);
+		AbilityTemplateManager.AbilityAvailabilityStrings.AddItem(default.NewAbilityAvailabilityStrings[idx]);
+	}
+}
+</code></pre><p>This avoids compatibility issues and even fixes errors arising from mods doing the config entries wrong. I do something similar
+for <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=1139981009" target=_blank>WotC: More Photobooth Options</a>, and custom code can help
+the many cases where mod compatibility is a concern but the config syntax is not expressive enough (perhaps even
+<a href=https://github.com/X2CommunityCore/X2WOTCCommunityHighlander/pull/454 target=_blank>custom Rulers</a>).</p><p>When the code becomes too complex, the Highlander sometimes provides features for mod code to easily modify config tables
+in a compatible way. For example, the Highlander has a <a href=https://x2communitycore.github.io/X2WOTCCommunityHighlander/tactical/LootTableAPI/ target=_blank>&ldquo;Loot Table API&rdquo;</a>
+that allows mods to modify the enemy tactical loot drops without stomping on other mods&rsquo; changes.</p><h2 id=script-packages>Script packages</h2><p>This config load order produces another load order because config files are the way mods tell the game to load script packages.
+Every mod with a script package has at least one entry in its <code>NonNativePackages</code>:</p><pre><code class=language-ini>[Engine.ScriptPackages]
++NonNativePackages=LW_Tuple
++NonNativePackages=DetailedSoldierListWOTC
+</code></pre><p>Not only affects this which packages are loaded, but also the order in which they are loaded.</p><h3 id=dependencies>Dependencies</h3><p>Package B depends on package A if A needs to be compiled and loaded before package B.
+Contrary to content packages, script packages do not cause their dependencies to be loaded automatically. We can visualize, as an example, the
+dependency graph for Long War of the Chosen @ <a href=https://github.com/long-war-2/lwotc/tree/dfbe52c0428ea639bcb54c09c1d79e042c34b32d target=_blank>dfbe52c</a> because
+it probably has the most complex dependency graph:</p><p><img class=img-zoomable src=/img/load-order/lw2.png alt="dependency graph lwotc"></p><p>This dependency graph is a <a href=https://en.wikipedia.org/wiki/Directed_acyclic_graph target=_blank>directed acyclic graph</a> (DAG): The edges are <em>directed</em>
+(an edge from A to B means A depends on B, but not the other way around) and the nodes are <em>acyclic</em> (there aren&rsquo;t any cycles).</p><p>Cycles are impossible because script packages are compiled and loaded one after another, but now we need to find out a good order for
+our packages to be compiled and loaded in.</p><ul><li>If the packages are listed in the wrong order for the compiler, the compiler will throw errors.</li><li>If the packages are loaded in the wrong order at run-time,
+the game will have incredible bugs arising from certain classes and functions missing from the loaded UnrealScript bytecode.</li></ul><p>The requirement for our <code>NonNativePackages</code> order is that if there is an edge from <code>A -> B</code>, then B must come before A in the order. Such an order
+is called a <a href=https://en.wikipedia.org/wiki/Topological_sorting target=_blank>topological ordering</a>, always exists for a DAG, and one such ordering can be found
+&ndash; unsurprisingly &ndash; in LWotC&rsquo;s <code>XComEngine.ini</code></p><pre><code class=language-ini>[Engine.ScriptPackages]
++NonNativePackages=LW_Tuple
++NonNativePackages=XModBase_Interfaces
++NonNativePackages=XModBase_Core_2_0_2
++NonNativePackages=LW_XModBase
++NonNativePackages=WallClimbOverride
++NonNativePackages=LWUtilities
++NonNativePackages=ModConfigMenuAPI
++NonNativePackages=LW_XCGS_ModOptions
++NonNativePackages=LW_XCGS_ToolboxOptions
++NonNativePackages=LW_SMGPack_Integrated
++NonNativePackages=LW_LaserPack_Integrated
++NonNativePackages=NewPromotionScreenByDefault_Integrated
++NonNativePackages=PI_Integrated
++NonNativePackages=LW_PerkPack_Integrated
++NonNativePackages=LW_OfficerPack_Integrated
++NonNativePackages=LW_AlienPack_Integrated
++NonNativePackages=LW_Toolbox_Integrated
++NonNativePackages=LW_WeaponsAndArmor
++NonNativePackages=LW_FactionBalance
++NonNativePackages=LW_Overhaul
+</code></pre><h3 id=meta-mods>Meta-mods</h3><p>We call mods that modify other mods &ldquo;meta-mods&rdquo;, and in this example, we&rsquo;re looking to make a mod that requires some code from <code>LW_WeaponsAndArmor</code>.
+It&rsquo;s tempting to make our <code>NonNativePackages</code> look like this:</p><pre><code class=language-ini>[Engine.ScriptPackages]
++NonNativePackages=LW_WeaponsAndArmor
++NonNativePackages=MyMetaMod
+</code></pre><p>Unfortunately, this has a fatal problem: Config load order is not guaranteed. If our meta-mod configs are loaded before LWotC&rsquo;s,
+then <code>LW_WeaponsAndArmor</code> is loaded before all of its dependencies. The dependency graph looks like this:</p><p><img class=img-zoomable src=/img/load-order/metamod.png alt="transitive dependency graph meta-mod"></p><p>The pink highlighted packages are <em>transitive dependencies</em> of <code>MyMetaMod</code>: <code>MyMetaMod</code>&rsquo;s direct dependencies, and dependencies of its dependencies and so on.
+All transitive dependencies need to be listed in <code>NonNativePackages</code> to defend against bad load order:</p><pre><code class=language-ini>[Engine.ScriptPackages]
++NonNativePackages=LW_Tuple
++NonNativePackages=XModBase_Interfaces
++NonNativePackages=XModBase_Core_2_0_2
++NonNativePackages=LW_XModBase
++NonNativePackages=LWUtilities
++NonNativePackages=LW_XCGS_ModOptions
++NonNativePackages=LW_SMGPack_Integrated
++NonNativePackages=LW_PerkPack_Integrated
++NonNativePackages=LW_WeaponsAndArmor
++NonNativePackages=MyMetaMod
+</code></pre><p>This is the minimal packages list &ndash; we could also just wholesale copy the entire LWotC <code>NonNativePackages</code> list.</p><div><div class="interjection advice"><p>If LWotC receives an update that changes the order in its package list, <code>MyMetaMod</code> needs to be updated too &ndash; otherwise the outdated
+<code>MyMetaMod</code> can potentially mess up the package load order of LWotC.<p></p></div></div><p><h3 id=run-order>Run order</h3><p>Package load order is crucial for mods to even work in the first place, but it also controls the order in which DLC hooks
+like <code>OnPostTemplatesCreated</code> and entry points like <code>CreateTemplates</code> are called. It can be useful for mods to do their
+template modifications in a specific order, for example RPG Overhaul needs to run before Primary Secondaries for those mods to pick
+up changes made to secondary weapons before creating primary versions.</p><p>The Highlander implements a system it calls
+<a href=https://github.com/X2CommunityCore/X2WOTCCommunityHighlander/issues/511 target=_blank>Run order</a> that allows mods to specify that their DLC hooks
+are ran before or after other mods.<sup id=fnref:2><a href=#fn:2 class=footnote-ref role=doc-noteref>2</a></sup> The Highlander sorts the DLCInfo classes at startup so that all DLC hooks are automatically affected:</p><pre><code class=language-ini>[XCOM2RPGOverhaul CHDLCRunOrder]
+RunPriorityGroup=RUN_LAST
++RunBefore=&quot;PrimarySecondaries&quot;
++RunBefore=&quot;WOTC_LW2SecondaryWeapons&quot;
+</code></pre><h2 id=closing-words>Closing words</h2><p>I hope this cleared some things up. If there&rsquo;s one takeaway here, it&rsquo;s that config load order is not guaranteed and config syntax
+is not expressive enough to solve many problems &ndash; and UnrealScript code can help. For some particular problems, the Highlander can
+jump in and provide additional helpers &ndash; don&rsquo;t hesitate to ask if the Highlander can help with one of them.</p><div class=footnotes role=doc-endnotes><hr><ol><li id=fn:1><p>According to <a href="https://devblogs.microsoft.com/oldnewthing/20140304-00/?p=1603" target=_blank>Raymond Chen</a>, on NTFS at least it&rsquo;s
+&ldquo;B-tree order, which if you cover one eye and promise not to focus too closely looks approximately alphabetical for US-English&rdquo;.&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:2><p>This feature doesn&rsquo;t have great documentation right now. I will add a link here once the Highlander has it documented.&#160;<a href=#fnref:2 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li></ol></div></div></article><div class="license markdown-body"><blockquote><p>Unless otherwise noted, the content of this site is licensed under <a rel=license href=https://creativecommons.org/licenses/by/4.0/ target=_blank>CC BY</a>.</p></blockquote></div><div class=post-comment data-comment=utterances><span class=post-comment-notloaded><i class="iconfont icon-chatbox-ellipses-sharp"></i>&nbsp;Load comments</span>
+<script>function loadComment(){var e,n=document.querySelector(".post-comment"),t=document.body.getAttribute("data-theme");t==="auto"?t=window.matchMedia("(prefers-color-scheme: dark)").matches?"photon-dark":"github-light":t=t==="dark"?"photon-dark":"github-light",e=document.createElement("script"),e.src="https://utteranc.es/client.js",e.setAttribute("repo","robojumper/robojumper.github.io"),e.setAttribute("issue-term","pathname"),e.setAttribute("theme",t),e.setAttribute("crossorigin","anonymous"),e.setAttribute("async",""),document.querySelector(".post-comment").appendChild(e),document.querySelector("span.post-comment-notloaded").setAttribute("style","display: none;")}</script></div></div><aside class="col-12 col-md-3 float-left sidebar"><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#config-files>Config files</a><ul><li><a href=#array-indexing>Array indexing</a></li><li><a href=#textual-identity>Textual identity</a></li><li><a href=#load-order>Load order</a></li><li><a href=#workarounds>Workarounds</a></li></ul></li><li><a href=#script-packages>Script packages</a><ul><li><a href=#dependencies>Dependencies</a></li><li><a href=#meta-mods>Meta-mods</a></li><li><a href=#run-order>Run order</a></li></ul></li><li><a href=#closing-words>Closing words</a></li></ul></nav></div></aside></div><div class=btn><div class=btn-menu id=btn-menu><i class="iconfont icon-grid-sharp"></i></div><div class=btn-toggle-mode><i class="iconfont icon-contrast-sharp"></i></div><div class=btn-scroll-top><i class="iconfont icon-chevron-up-circle-sharp"></i></div></div><aside class=sidebar-mobile style=display:none><div class=sidebar-wrapper><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#config-files>Config files</a><ul><li><a href=#array-indexing>Array indexing</a></li><li><a href=#textual-identity>Textual identity</a></li><li><a href=#load-order>Load order</a></li><li><a href=#workarounds>Workarounds</a></li></ul></li><li><a href=#script-packages>Script packages</a><ul><li><a href=#dependencies>Dependencies</a></li><li><a href=#meta-mods>Meta-mods</a></li><li><a href=#run-order>Run order</a></li></ul></li><li><a href=#closing-words>Closing words</a></li></ul></nav></div></div></aside></main><footer><div class="container-lg clearfix"><div class="col-12 footer"><span>&copy; 2020-2023
+<a href=https://robojumper.github.io>robojumper</a>
+| <a href=https://github.com/robojumper/robojumper.github.io>Source code</a>
+| Powered by <a href=https://github.com/dsrkafuu/hugo-theme-fuji/ target=_blank>Fuji-v2</a> & <a href=https://gohugo.io/ target=_blank>Hugo</a></span></div></div></footer><script defer src=https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/components/prism-core.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/plugins/autoloader/prism-autoloader.min.js></script>
+<script defer src=/assets/js/fuji.min.js></script></body></html>

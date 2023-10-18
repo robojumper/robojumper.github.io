@@ -1,0 +1,174 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name=HandheldFriendly content="True"><meta http-equiv=x-ua-compatible content="IE=edge"><meta http-equiv=cache-control content="no-transform"><meta http-equiv=cache-control content="no-siteapp"><meta name=generator content="Hugo 0.119.0"><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><title>Properties - Too Real</title><meta name=author content="robojumper"><meta name=description content="About the Unreal Engine and XCOM 2 modding."><meta name=keywords content="unrealscript"><meta property="og:title" content="Properties"><meta name=twitter:title content="Properties"><meta property="og:type" content="article"><meta property="og:url" content="https://robojumper.github.io/too-real/properties/"><meta property="og:description" content="Let&rsquo;s develop an understanding of how the UnrealScript virtual machine handles variable data&mldr;"><meta name=twitter:description content="Let&rsquo;s develop an understanding of how the UnrealScript virtual machine handles variable data&mldr;"><meta name=twitter:card content="summary"><meta property="article:published_time" content="2020-12-01T18:45:00+01:00"><meta property="article:modified_time" content="2020-12-01T18:45:00+01:00"><style>@media(prefers-color-scheme:dark){body[data-theme=auto] img{filter:brightness(60%)}}body[data-theme=dark] img{filter:brightness(60%)}</style><link rel=stylesheet href=https://robojumper.github.io/assets/css/fuji.min.css></head><body data-theme=auto data-theme-auto=false><script data-cfasync=false>var fujiThemeData=localStorage.getItem("fuji_data-theme");fujiThemeData?fujiThemeData!=="auto"&&document.body.setAttribute("data-theme",fujiThemeData==="dark"?"dark":"light"):localStorage.setItem("fuji_data-theme","auto")</script><header><div class="container-lg clearfix"><div class="col-12 header"><a class=title-main href=https://robojumper.github.io>Too Real</a>
+<span class=title-sub>About the Unreal Engine and XCOM 2 modding.</span></div></div></header><main><div class="container-lg clearfix"><div class="col-12 col-md-9 float-left content"><article><h2 class="post-item post-title"><a href=https://robojumper.github.io/too-real/properties/>Properties</a></h2><div class="post-item post-meta"><span><i class="iconfont icon-today-sharp"></i>&nbsp;2020-12-01</span>
+<span><i class="iconfont icon-time-sharp"></i>&nbsp;10 minutes</span>
+<span><i class="iconfont icon-pricetags-sharp"></i>&nbsp;<a href=/tags/unrealscript>unrealscript</a>&nbsp;</span></div><div class="post-content markdown-body"><p>This is a topic that comes up once every while, but has wide-reaching implications for many parts of the UnrealScript language and mod development,
+particularly when working on the Highlander. We&rsquo;re going to delve into the internals of property storage and, more practically, clear up why you can&rsquo;t
+pass booleans as <code>out</code> parameters, and why attempts to add variables to native classes have been
+<a href=https://github.com/X2CommunityCore/X2WOTCCommunityHighlander/pull/672#pullrequestreview-307585934 target=_blank>unceremoniously shot down</a>.</p><h2 id=what-even-are-properties>What even are properties</h2><p>Intuitively, <em>properties</em> is the term UnrealScript uses for <em>variables</em>, though this definition leaves room for interpretation as to what a variable exactly is.</p><p>Consider the following code snippet:</p><pre><code class=language-java>class MyClass extends Object;
+
+var int GlobalCounters[2]; // int property of arity 2 in class
+
+struct SomeStruct
+{
+    var bool Cached; // bool property in struct
+    var bool PrevValue; // bool property in struct
+    var array&lt;int&gt; ChangeCounters; // int array property in struct
+};
+
+var SomeStruct State; // struct property in class
+delegate OnConditionChange(bool NewValue); // delegate property in class
+
+//       Argument properties vvvvvvvvvvvvvvv--vvvvvvvv
+function bool CheckCondition(Actor ChkObject, int Fact, out string Dbg) {
+//       ^^^^ bool property return         out property ^^^^^^^^^^^^^^
+    local float Tmp; // float property in function
+
+    // complicated logic omitted
+
+    return Tmp &gt; 0.0f;
+}
+</code></pre><p>I&rsquo;ve marked all properties with comments. The code snippet demonstrates that there are different kinds of properties,
+corresponding to the UnrealScript types:</p><ul><li>Primitive types like Byte/Enum, Int, Bool, Float, Name</li><li>Composite types like Struct, Map</li><li>Owning types like Array, String</li><li>Reference types like Object, Interface, Delegate</li></ul><p>We can make a reverse observation: All properties have an owner!
+This code snippet exhibits the three kinds of property owners UnrealScript has:</p><ul><li>Classes</li><li>Structs</li><li>Functions</li></ul><p>Finally, the astute reader has noticed the <code>var int GlobalCounters[2]</code> &ndash; all properties have
+an arbitrary, but fixed at compile-time <em>arity</em> &ndash; properties can store a fixed number of values (by default 1).</p><h2 id=wheres-the-data>Where&rsquo;s the data?</h2><h3 id=naïve-implementation>Naïve implementation</h3><p>In a very simplistic implementation, the properties would own the data themselves. There would be a <code>Property</code> class:</p><pre><code class=language-java>class Property extends Field abstract;
+
+var name PropertyName;
+var int Arity;
+</code></pre><p>All different property kinds would be implemented in a fairly similar manner<sup id=fnref:1><a href=#fn:1 class=footnote-ref role=doc-noteref>1</a></sup>:</p><pre><code class=language-java>class FloatProperty extends Property;
+
+var float Value[Arity];
+</code></pre><p>Note that these examples use a syntax similar to UnrealScript. The actual implementation would, of course, be written in C++.</p><p>Our property owner would then look something like this:</p><pre><code class=language-java>class Class extends Object;
+
+var Class SuperClass;
+var array&lt;Property&gt; Properties;
+</code></pre><p>Instantiating a class is then simply a matter of cloning the <code>Properties</code> array of the class and all its super classes and their contents.</p><p>Let&rsquo;s visualize how this naïve implementation stores the class property data:</p><p><img class=img-zoomable src=/img/properties/properties_naive.png alt="class property data visualization"></p><p>There are several problems with this approach:</p><ul><li>It wastes space!<ul><li>Even without an actual instance, our properties store some value even though it&rsquo;s not useful.</li><li>Instances store copies of metadata like name, arity even though it stays constant for all instances.</li></ul></li><li>It wastes performance!<ul><li>Every property is a new allocated object, so getting to the property data requires following at least two pointers, which is bad for <a href=https://en.wikipedia.org/wiki/CPU_cache#Cache_performance target=_blank>CPU cache efficiency</a>:<ul><li>The <code>Properties</code> array must allocate its contents somewhere because the number of properties isn&rsquo;t known, and even different for different classes.
+Getting to the array contents is the first pointer indirection.</li><li>Every <code>Properties</code> entry itself is a reference to an object allocated somewhere, so we have to follow another pointer.</li></ul></li><li>Instantiating a class requires copying all metadata.</li></ul></li><li>It&rsquo;s inconvenient to efficiently work with on the C++ (native) side! C++ has a fairly predictable layout algorithm and places all member data (class/struct variables)
+into one contiguous memory region, with one allocation for the entire class or struct. It would be great to lay out all data in the exact same way
+so that we get C++ interoperability for free.</li></ul><h3 id=borrowing-from-c>Borrowing from C++</h3><p>This last point offers a very practical solution: We store the property data in one big chunk of bytes, and instead of having our properties store the data themselves,
+they instead store <em>where</em> in that data chunk the property data lies:</p><pre><code class=language-java>class Property extends Field abstract;
+
+var name PropertyName;
+var int Arity;
+var int Offset;
+</code></pre><p><img class=img-zoomable src=/img/properties/properties_opt.png alt="class property data visualization optimized"></p><p>This is a massive improvement: Even if we instantiate our class hundreds of times, all instances share the same property metadata and
+only the pink-colored data is unique to instances. Every property has an offset that matches the position of the data in the data block.</p><p>The <code>array</code> data isn&rsquo;t stored in that same block because we don&rsquo;t know in advance how many elements will be stored, and accordingly the array
+allocates storage separately.</p><p>If we were to mark our class and struct as <code>native</code>, the compiler would automatically generate the following header file:<sup id=fnref:2><a href=#fn:2 class=footnote-ref role=doc-noteref>2</a></sup></p><pre><code class=language-cpp>struct FSomeStruct
+{
+    BITFIELD Cached:1;
+    BITFIELD PrevValue:1;
+    TArray&lt;INT&gt; ChangeCounters;
+};
+
+class UMyClass : public UObject
+{
+public:
+    //## BEGIN PROPS MyClass
+    INT GlobalCounters[2];
+    struct FSomeStruct State;
+    FScriptDelegate __OnConditionChange__Delegate;
+    //## END PROPS MyClass
+}
+</code></pre><p>For UnrealScript, the exact layout doesn&rsquo;t really matter: When a script package is loaded, the UnrealScript code within references the
+properties by name, and the <em>dynamic linker</em> will translate those names into offsets once, at load time.</p><p>For C++ however, this data layout is important: As long as the UnrealScript compiler lays out the property data the exact same way as
+the C++ compiler used for the game, the data pointer <code>ObjectInstance->Data</code> pointing to a seemingly random chunk of bytes can be re-interpreted
+as a pointer to a <code>UMyClass *</code>; a pointer to a C++ class.</p><div><div class="interjection info"><p>&ldquo;The way data is laid out in memory&rdquo; is part of the ABI, the <a href=https://en.wikipedia.org/wiki/Application_binary_interface target=_blank>Application Binary Interface</a>.
+Even though C++ doesn&rsquo;t guarantee any particular layout, the UnrealScript compiler just needs to match what the particular C++ compiler does.</p><p>Most notably, C++ places <em>alignment</em> requirements on some data: A 64-bit pointer needs to be placed at addresses that are a multiple of 8 bytes,
+so we have some <em>padding</em> to round up from 12 to 16 bytes between the booleans and the <code>ChangeCounters</code> array.</p></div></div><p><p>The C++ side has no dynamic linker for properties. Changes to native class or struct properties cause a change in the header file
+and require a full re-compile of the C++ side.</p><p>If the C++ side is not recompiled, native will access variables at the wrong offsets and will read and write garbage data.</p><div><div class="interjection advice"><p>Do not modify the properties of native classes or structs. Modders have no way to re-compile any C++ code, so ABI-incompatible changes
+cause unfixable problems. The compiler and game will sometimes even error out at startup time for some changes.<p></p></div></div><p><h3 id=native-only-types>Native-only types</h3><p>The C++ header has a <code>TArray&lt;INT></code> corresponding to an <code>array&lt;int></code>. These two types have the exact same data layout,
+so both UnrealScript code and C++ code can use the same array with the same data without any conversion costs. This <code>array</code>
+type is built into the engine combined with appropriate UnrealScript op-codes to access this array.</p><p>But there are also types that cannot be accessed from UnrealScript, but are important to have in a class for native code.
+Consider the UnitValues map:<sup id=fnref:3><a href=#fn:3 class=footnote-ref role=doc-noteref>3</a></sup></p><pre><code class=language-java>var private native Map_Mirror UnitValues{TMap&lt;FName, FUnitValue&gt;};
+</code></pre><p>This corresponds to the following C++ declaration:</p><pre><code class=language-cpp>class UXComGameState_Unit : public UXComGameState_BaseObject, public IX2GameRulesetVisibilityInterface, public IX2VisualizedInterface, public IDamageable
+{
+public:
+    //## BEGIN PROPS XComGameState_Unit
+    // ...
+    TMap&lt;FName, FUnitValue&gt; UnitValues;
+</code></pre><p>C++ has no problems accessing this map, but there are no ways to access the map from UnrealScript. What is <code>Map_Mirror</code> even defined as?</p><pre><code class=language-java>struct pointer
+{
+	var native const int Dummy;
+};
+
+struct BitArray_Mirror
+{
+	var native const pointer IndirectData;
+	var native const int InlineData[4];
+	var native const int NumBits;
+	var native const int MaxBits;
+};
+
+struct SparseArray_Mirror
+{
+	var native const array&lt;int&gt; Elements;
+	var native const BitArray_Mirror AllocationFlags;
+	var native const int FirstFreeIndex;
+	var native const int NumFreeIndices;
+};
+
+struct Set_Mirror
+{
+	var native const SparseArray_Mirror Elements;
+	var native const int InlineHash;
+	var native const pointer Hash;
+	var native const int HashSize;
+};
+
+struct Map_Mirror
+{
+	var native const Set_Mirror Pairs;
+};
+</code></pre><p>Wow! That&rsquo;s a lot! All of this is necessary to exactly <em>mirror</em> the C++ data layout. All properties are <code>const</code> to prevent UnrealScript from
+mucking with native data structures, while C++ code can freely work with this map. Notably, these structs are kept in sync manually:
+The <code>{TMap&lt;FName, FUnitValue>}</code> suffix in the declaration tells the UnrealScript compiler to simply generate a declaration with an entirely
+different native type instead of using <code>Map_Mirror</code>.</p><h3 id=booleans>Booleans</h3><p>If we review the <a href=#borrowing-from-c>Borrowing from C++</a> section, there&rsquo;s a few weird things about booleans:</p><ul><li>Several booleans have the same offset</li><li>Booleans have an extra <code>PackIndex</code></li><li>C++ implements them with <code>BITFIELD &lt;name>:1</code></li></ul><p>It turns out that UnrealScript stores up to 32 consecutive booleans as individual bits of a 32-bit integer.
+In order to address a boolean, we not only need the address of that integer, but also the individual bit index.</p><p>As a consequence, the UnrealScript virtual machine has separate op-codes for boolean property assignment and
+other property assignment.</p><div><div class="interjection info"><p>There&rsquo;s also an op-code for out property assignment, but not one for out boolean property assignment.
+<code>out bool</code> is thus unsupported.<p></p></div></div><p><h2 id=functions>Functions</h2><p>We&rsquo;ve mentioned before how not only classes and structs, but also functions can own properties. Let&rsquo;s re-visit our example function:</p><pre><code class=language-java>function bool CheckCondition(Actor ChkObject, int Fact, out string Dbg) {
+    local float Tmp;
+
+    // complicated logic omitted
+
+    return Tmp &gt; 0.0f;
+}
+</code></pre><p>It turns out that functions do something extremely similar to classes. All function arguments and local properties are allocated in one chunk:</p><p><img class=img-zoomable src=/img/properties/properties_func.png alt="function property data visualization"></p><p>Both function arguments and local properties are part of the <em>stack frame</em> &ndash; a data block allocated for all these properties upon calling the function.
+The out parameter is not present in this data block because out parameters live somewhere else &ndash; the entire point of out parameters
+is to skip the part where the data needs to be copied to the stack frame and back; and the code directly writes to the borrowed storage location.</p><p>There&rsquo;s even a hidden return property that the function writes to upon <code>return</code>ing; the UnrealScript VM retrieves the return value from there.</p><p>There is a difference between class properties and function argument properties: Class properties are accessed by name, but when we call a function
+we pass the function arguments by index. If we switched around arguments in package A, package B that calls this function needs
+to not only be re-compiled, but also re-written since the argument order and types no longer match.</p><p>One exception are optional parameters; they may be added to the end of the arguments list without breaking dependent UnrealScript code.</p><p>As always, native code makes things more complicated. For example, the following event</p><pre><code class=language-java>static event ModifyTacticalTransferStartState(XComGameState TransferStartState)
+{
+
+}
+</code></pre><p>is turned into the following call stub:</p><pre><code class=language-cpp>struct X2DownloadableContentInfo_eventModifyTacticalTransferStartState_Parms
+{
+    class UXComGameState* TransferStartState;
+};
+
+class UX2DownloadableContentInfo : public UObject
+{
+public:
+    // ...
+    void eventModifyTacticalTransferStartState(class UXComGameState* TransferStartState)
+    {
+        X2DownloadableContentInfo_eventModifyTacticalTransferStartState_Parms Parms(EC_EventParm);
+        Parms.TransferStartState=TransferStartState;
+        ProcessEvent(FindFunctionChecked(XCOMGAME_ModifyTacticalTransferStartState),&amp;Parms);
+    }
+}
+</code></pre><p>Similarly, we can&rsquo;t modify the arguments list of existing events: This C++ code allocates the data block for all function arguments
+on the stack as a <code>X2DownloadableContentInfo_eventModifyTacticalTransferStartState_Parms</code> struct and copies the arguments into it
+(similar to what a data block for class properties looks like), so the C++ side assumes a fixed size and offsets.</p><div><div class="interjection info"><p>Strictly speaking, this doesn&rsquo;t only apply to events. Events are more convenient to call from C++, but nothing prevents native
+code from calling regular functions the same way. Usually it&rsquo;s safe to assume only events are called from C++.<p></p></div></div><p><p>One thing that works in our favor here is that functions are found by name (with <code>FindFunctionChecked</code>) when calling, so we can easily add
+functions to native classes without breaking the ABI.</p><h2 id=closing-words>Closing Words</h2><p>There&rsquo;s a closely related topic we&rsquo;ve approached in the last part of this post: Function dispatch. In a separate blog post,
+we&rsquo;re going to look at how functions are called, out parameters are implemented, and how subtyping/variance interacts with them.</p><div class=footnotes role=doc-endnotes><hr><ol><li id=fn:1><p>Ignore the <code>[Arity]</code> part for now; it&rsquo;s unlikely to work in any programming language
+but actually implementing it is out of scope for the demonstration of a naïve proposal&#160;<a href=#fnref:1 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:2><p>Auto-generated header files can be found in <code>Development/Src/*/Inc/*.h</code>&#160;<a href=#fnref:2 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li><li id=fn:3><p>See <code>XComGameState_Unit.UnitValues</code>&#160;<a href=#fnref:3 class=footnote-backref role=doc-backlink>&#8617;&#xfe0e;</a></p></li></ol></div></div></article><div class="license markdown-body"><blockquote><p>Unless otherwise noted, the content of this site is licensed under <a rel=license href=https://creativecommons.org/licenses/by/4.0/ target=_blank>CC BY</a>.</p></blockquote></div><div class=post-comment data-comment=utterances><span class=post-comment-notloaded><i class="iconfont icon-chatbox-ellipses-sharp"></i>&nbsp;Load comments</span>
+<script>function loadComment(){var e,n=document.querySelector(".post-comment"),t=document.body.getAttribute("data-theme");t==="auto"?t=window.matchMedia("(prefers-color-scheme: dark)").matches?"photon-dark":"github-light":t=t==="dark"?"photon-dark":"github-light",e=document.createElement("script"),e.src="https://utteranc.es/client.js",e.setAttribute("repo","robojumper/robojumper.github.io"),e.setAttribute("issue-term","pathname"),e.setAttribute("theme",t),e.setAttribute("crossorigin","anonymous"),e.setAttribute("async",""),document.querySelector(".post-comment").appendChild(e),document.querySelector("span.post-comment-notloaded").setAttribute("style","display: none;")}</script></div></div><aside class="col-12 col-md-3 float-left sidebar"><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#what-even-are-properties>What even are properties</a></li><li><a href=#wheres-the-data>Where&rsquo;s the data?</a><ul><li><a href=#naïve-implementation>Naïve implementation</a></li><li><a href=#borrowing-from-c>Borrowing from C++</a></li><li><a href=#native-only-types>Native-only types</a></li><li><a href=#booleans>Booleans</a></li></ul></li><li><a href=#functions>Functions</a></li><li><a href=#closing-words>Closing Words</a></li></ul></nav></div></aside></div><div class=btn><div class=btn-menu id=btn-menu><i class="iconfont icon-grid-sharp"></i></div><div class=btn-toggle-mode><i class="iconfont icon-contrast-sharp"></i></div><div class=btn-scroll-top><i class="iconfont icon-chevron-up-circle-sharp"></i></div></div><aside class=sidebar-mobile style=display:none><div class=sidebar-wrapper><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#what-even-are-properties>What even are properties</a></li><li><a href=#wheres-the-data>Where&rsquo;s the data?</a><ul><li><a href=#naïve-implementation>Naïve implementation</a></li><li><a href=#borrowing-from-c>Borrowing from C++</a></li><li><a href=#native-only-types>Native-only types</a></li><li><a href=#booleans>Booleans</a></li></ul></li><li><a href=#functions>Functions</a></li><li><a href=#closing-words>Closing Words</a></li></ul></nav></div></div></aside></main><footer><div class="container-lg clearfix"><div class="col-12 footer"><span>&copy; 2020-2023
+<a href=https://robojumper.github.io>robojumper</a>
+| <a href=https://github.com/robojumper/robojumper.github.io>Source code</a>
+| Powered by <a href=https://github.com/dsrkafuu/hugo-theme-fuji/ target=_blank>Fuji-v2</a> & <a href=https://gohugo.io/ target=_blank>Hugo</a></span></div></div></footer><script defer src=https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/components/prism-core.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/plugins/autoloader/prism-autoloader.min.js></script>
+<script defer src=/assets/js/fuji.min.js></script></body></html>

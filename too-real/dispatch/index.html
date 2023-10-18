@@ -1,0 +1,124 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name=HandheldFriendly content="True"><meta http-equiv=x-ua-compatible content="IE=edge"><meta http-equiv=cache-control content="no-transform"><meta http-equiv=cache-control content="no-siteapp"><meta name=generator content="Hugo 0.119.0"><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><title>Function Dispatch - Too Real</title><meta name=author content="robojumper"><meta name=description content="About the Unreal Engine and XCOM 2 modding."><meta name=keywords content="unrealscript"><meta property="og:title" content="Function Dispatch"><meta name=twitter:title content="Function Dispatch"><meta property="og:type" content="article"><meta property="og:url" content="https://robojumper.github.io/too-real/dispatch/"><meta property="og:description" content="In which we investigate the different ways functions are called and what it means for performance&mldr;"><meta name=twitter:description content="In which we investigate the different ways functions are called and what it means for performance&mldr;"><meta name=twitter:card content="summary"><meta property="article:published_time" content="2020-12-08T17:00:00+01:00"><meta property="article:modified_time" content="2020-12-08T17:00:00+01:00"><style>@media(prefers-color-scheme:dark){body[data-theme=auto] img{filter:brightness(60%)}}body[data-theme=dark] img{filter:brightness(60%)}</style><link rel=stylesheet href=https://robojumper.github.io/assets/css/fuji.min.css></head><body data-theme=auto data-theme-auto=false><script data-cfasync=false>var fujiThemeData=localStorage.getItem("fuji_data-theme");fujiThemeData?fujiThemeData!=="auto"&&document.body.setAttribute("data-theme",fujiThemeData==="dark"?"dark":"light"):localStorage.setItem("fuji_data-theme","auto")</script><header><div class="container-lg clearfix"><div class="col-12 header"><a class=title-main href=https://robojumper.github.io>Too Real</a>
+<span class=title-sub>About the Unreal Engine and XCOM 2 modding.</span></div></div></header><main><div class="container-lg clearfix"><div class="col-12 col-md-9 float-left content"><article><h2 class="post-item post-title"><a href=https://robojumper.github.io/too-real/dispatch/>Function Dispatch</a></h2><div class="post-item post-meta"><span><i class="iconfont icon-today-sharp"></i>&nbsp;2020-12-08</span>
+<span><i class="iconfont icon-time-sharp"></i>&nbsp;8 minutes</span>
+<span><i class="iconfont icon-pricetags-sharp"></i>&nbsp;<a href=/tags/unrealscript>unrealscript</a>&nbsp;</span></div><div class="post-content markdown-body"><p>Last blog post was about <a href=../properties/>Properties</a>, so a logical continuation is looking at
+functions next. In particular, we&rsquo;re going to address how functions are <em>called</em> and what happens before
+the function body is executed.</p><p>We&rsquo;re first going to look at what the generic sequence of events for a function call looks like, and then
+investigate every step in more detail. The general sequence of events will go something like:</p><ol><li>Find function</li><li>Allocate stack frame (see <a href=../properties/#functions>Functions</a> in last week&rsquo;s blog post)</li><li>Default-initialize locals, copy non-<code>out</code> function arguments to stack frame, link <code>out</code> arguments</li><li>Execute function body</li></ol><h2 id=finding-the-function>Finding the function</h2><p>UnrealScript, by default, allows subclasses to override functions. That means that in advance, we don&rsquo;t know which
+particular function will be called when we have an object &ndash; it&rsquo;s entirely possible we&rsquo;re looking at a subclass
+and the function we&rsquo;re looking to call might be overridden. Last week&rsquo;s blog post revealed that there is a
+<code>FindFunctionChecked</code> C++ function to find a function by name &ndash; let&rsquo;s imagine what it might look like:</p><pre><code class=language-cpp>UFunction* UObject::FindFunctionChecked(FName FuncName) {
+	UFunction *Result = NULL;
+	UClass *CheckClass = GetClass();
+	while (CheckClass != NULL) {
+		Result = CheckClass-&gt;Functions.Find(FuncName);
+		if (Result != NULL) {
+			return Result;
+		}
+		CheckClass = CheckClass-&gt;GetSuperClass();
+	}
+	appErrorf(&quot;Failed to find function %s in %s&quot;, FuncName.ToString(), this-&gt;ToString());
+}
+</code></pre><p>Whenever we call a function, we have to look up this function in the current class. If not found, we have to check the superclass,
+and repeat until we found it.</p><div><div class="interjection info"><p>Of course, it&rsquo;s possible the function doesn&rsquo;t exist &ndash; for example when it&rsquo;s a Highlander-provided function but the Highlander
+is not enabled:</p><pre><code class=language-text>Critical: appError called: Assertion failed: appErrorf [File:G:\BuildAgent\work\9a884cb2af69f6ff\main\XCOM2\Development\Src\Core\Src\UnObj.cpp] [Line: 2456]
+Failed to find function SubscribeToOnInput in UIScreenStack XPACK_Shell_Intro.TheWorld:PersistentLevel.XComShellPresentationLayer_0.UIScreenStack_0
+</code></pre></div></div><p><p>This <em>virtual dispatch</em> (named after C++&rsquo;s <code>virtual</code> functions) has a cost: We have to perform at least one hash map lookup every time we want
+to call a function &ndash; and more lookups the further our subclass is away from the lowest function definition. This is particularly expensive
+for functions in <code>Object.uc</code> since it&rsquo;s the root of the inheritance chain and functions there are the furthest away they could possibly be.</p><h3 id=final-functions>Final functions</h3><p>There is one trick to mitigate this cost: The <code>final</code> keyword, which prohibits subclasses from overriding the function. The compiler
+exploits this by generating a non-virtual function call &ndash; it embeds the function reference directly as an object and lets the dynamic linker
+resolve this call once, at package load time. We can measure this effect (i5-3470 @ 3.20GHz):</p><pre><code class=language-java>exec function BenchFunctionCall(optional int num = 100000000)
+{
+	local int i;
+
+	`log(&quot;Bench No-Op Start&quot;);
+    for (i = 0; i &lt; num; i++) { }
+	`log(&quot;Bench No-Op End&quot;);
+
+	`log(&quot;Bench Func Start&quot;);
+    for (i = 0; i &lt; num; i++) { SubFunction(); }
+	`log(&quot;Bench Func End&quot;);
+
+	`log(&quot;Bench Final Func Start&quot;);
+    for (i = 0; i &lt; num; i++) { SubFunction2(); }
+	`log(&quot;Bench Final Func End&quot;);
+}
+
+function SubFunction() { }
+
+final function SubFunction2() { }
+</code></pre><ul><li>Virtual dispatch: 30ns / call</li><li>Non-virtual dispatch: 20.2ns / call</li></ul><p>A <code>private</code> function is always <code>final</code>. Since <code>private</code> functions are entirely invisible to outside classes and subclasses,
+they also don&rsquo;t need virtual dispatch.</p><div><div class="interjection advice"><p>Marking functions <code>final</code> reduces the overhead from calling functions. The benefit increases the more likely it is
+for instances to be further down the inheritance chain.</p><p>Basically all functions in <code>Object.uc</code> are <code>final</code>.</p></div></div><p><h3 id=delegates>Delegates</h3><p>Delegates always link to a concrete function and object, so there&rsquo;s no name lookup involved when calling through a delegate.
+Still, it&rsquo;s more expensive than calling a final function directly because we need to retrieve the delegate property data first,
+which requires more pointer accesses.</p><h2 id=the-stack-frame>The Stack Frame</h2><p>Once we find our function, we need to allocate space for the stack frame (unless we&rsquo;re calling a native function, where the C++
+compiler generated <em>whatever</em> code). We can try to purposefully blow up the stack frame size:</p><pre><code class=language-java>final function SubFunctionSmall() {
+	local int Prop1;
+}
+
+final function SubFunctionMedium() {
+	local int Prop1, Prop2, Prop3, Prop4, Prop5, Prop6, Prop7, Prop8;
+}
+
+final function SubFunctionLarge() {
+	local int Prop1, Prop2, Prop3, Prop4, Prop5, Prop6, Prop7, Prop8, Prop9, Prop10;
+	local int Prop11, Prop12, Prop13, Prop14, Prop15, Prop16, Prop17, Prop18, Prop19, Prop20;
+	local int Prop21, Prop22, Prop23, Prop24, Prop25, Prop26, Prop27, Prop28, Prop29, Prop30;
+	local int Prop31, Prop32;
+}
+</code></pre><div><div class="interjection info"><p>Nevermind my &ldquo;unreferenced local variable&rdquo; warnings.<p></p></div></div><p><p>With a baseline of no locals, the overhead of locals can be determined:</p><ul><li>Baseline (no locals): 20.8ns / call</li><li>Small (1 int local): 57.0ns / call</li><li>Medium (8 int locals): 58.9ns / call</li><li>Large (32 int locals): 62.4ns / call</li></ul><p>Turns out that without any locals, the UnrealScript virtual machine needs to allocate no stack frame
+at all, so it&rsquo;s reasonably cheap. Once we have any local variables, we need to allocate space for
+the stack frame, which makes this much more expensive &ndash; mostly regardless of the number and size of locals.</p><h2 id=arguments>Arguments</h2><p>Initializing locals is comparatively cheap, since the default value for all property data is represented
+as the all-zeros bit pattern and the stack frame just needs to be zeroed. Arguments, on the other hand,
+need to be copied over, which is more costly, especially since some arguments require an unbounded
+amount of memory to be copied:</p><pre><code class=language-java>final function int FindMax(array&lt;int&gt; arr) {
+    // ...
+}
+</code></pre><p>For this function, the entire array data needs to be copied too, since <code>FindMax</code> requested a copy of the full array.
+For a 100-element array, this function call takes 128.1ns &ndash; and will take longer the longer the array is.</p><p>We can improve this by using the <code>out</code> parameter mode: <code>out</code> means that we reference the original array
+storage location without copying all data:</p><pre><code class=language-java>final function int FindMax(out array&lt;int&gt; arr) {
+    // ...
+}
+</code></pre><p>Again, for a 100-element array, this takes 44.6ns, but this will be independent of the array size.</p><p>This has the small disadvantage that our function could now modify the array and have it affect the calling code.
+We can mark this parameter as <code>const out</code> to take away the mutability. <code>const out</code> is always meant to be a
+performance optimization, since the <code>const</code> takes away all the functionality added by <code>out</code>.</p><div><div class="interjection advice"><p><code>out</code> properties have a higher overhead on access &ndash; don&rsquo;t indiscriminately mark every argument as <code>out</code>.
+Arrays and structs usually make sense to pass by <code>out</code>.</p><p>958 functions in the base game make use of <code>const out</code>.</p></div></div><p><h3 id=out-parameter-soundness>Out Parameter Soundness</h3><p>One thing you might have come across with <code>out</code> parameters is that dynamic array elements can&rsquo;t be out parameters. Consider
+the following code snippet:</p><pre><code class=language-java>var array&lt;int&gt; TheArray;
+
+function Ok() {
+	self.TheArray.AddItem(1);
+	// ❌ Error, Call to 'Evil', parameter 1: Not allowed to pass a dynamic array element as the value for an out parameter
+	self.Evil(TheArray[0]);
+}
+
+function Evil(out int SomeInt) {
+	self.TheArray.AddItem(3);
+	`log(SomeInt); // ⚡
+}
+</code></pre><p>If we remember anything from last week&rsquo;s blog post, it&rsquo;s that arrays store their elements on a separate allocation.
+By adding an element while holding a pointer to another element, the array would re-allocate and we could access freed memory
+in the line commented with ⚡:</p><p><img class=img-zoomable src=/img/dispatch/realloc-out.png alt="use-after-free visualization"></p><div><div class="interjection info"><p>Any safe language must reject this; C# supports <code>out</code>/<code>ref</code> parameters too and rejects this. Both
+UnrealScript and C# never allow dynamic array elements as <code>out</code>/<code>ref</code> parameters.</p><p>Rust is a safe language with a sophisticated borrow checker that would reject this particular code but doesn&rsquo;t disallow
+dynamic array elements as references when it can prove that the array can&rsquo;t be modified in the function.</p><p>In unsafe languages like C and C++, retaining access to de-allocated memory cannot be prevented by the compiler and actual access
+causes <em>use-after-free</em> errors, generally a security- and safety-relevant class of bugs.</p></div></div><p><h2 id=assorted-modifiers>Assorted Modifiers</h2><h3 id=static>Static</h3><p>A <code>static</code> function behaves as if it doesn&rsquo;t have an associated instance. Access to <code>self</code> is disallowed, and
+the function can be called without having an instance. Yet, there is an owning object (the Class Default Object/CDO),
+and dispatch is still virtual (since you could explicitly be calling the function on a sub-class that doesn&rsquo;t override
+the function <em>yet</em> but does at some later point).</p><h3 id=singular>Singular</h3><p>Whenever a <code>singular</code> function is called, the VM sets a &ldquo;we&rsquo;re in a singular function&rdquo; flag and clears it when that function
+returns. When the flag is set, calls to singular functions are <strong>skipped</strong>.</p><div><div class="interjection advice"><p>This is used in the base game to prevent runaway recursion from physics events. Please don&rsquo;t use it in any algorithms; it&rsquo;s global
+state and an awful hack.<p></p></div></div><p><h3 id=simulated>Simulated</h3><p>The <code>simulated</code> modifier is only relevant for <a href=https://docs.unrealengine.com/udk/Three/FunctionReplication.html#Function%20replication%20and%20simulation target=_blank>Replication</a>,
+the Unreal Engine 3 solution to networking and multiplayer. I don&rsquo;t think anyone in the XCOM 2 community understands this system well enough to
+explain what <code>simulated</code> does. In XCOM 2, we mark all UI functions as <code>simulated</code> as a sort of cargo cult.</p><h2 id=alternatively>Alternatively</h2><p>&mldr; don&rsquo;t call any functions at all. It would be great if the UnrealScript compiler supported merging small private functions into
+calling functions (called <a href=https://en.wikipedia.org/wiki/Inline_expansion target=_blank>Inlining</a>), but it doesn&rsquo;t. If you have some code
+that gets slowed down significantly by leaf function calls, consider manually inlining the function body.</p><div><div class="interjection info"><p>This is something I experimented with in an <a href=https://github.com/robojumper/X2WOTCCommunityHighlander/commit/4a86d70b7d320dded4e7971f9a29b28b9cbc3b65#diff-cd680b84d639d6464dca8ca8694f10a1201692892639d1191fcf04eb23de9025R510-R545 target=_blank>UnrealScript implementation</a> of QuickSort.
+Calling the comparison function/delegate (which necessarily has arguments and a hence a stack frame) can be unreasonably expensive.<p></p></div></div><p><h2 id=closing-words>Closing words</h2><p>I believe that at this point, I have covered the topics I set out to cover when I started this blog post series. Expect future entries
+to be published sporadically at best and to cover smaller bits and interesting facts about UnrealScript instead of grand topics.</p><p>Thanks for reading!</p></div></article><div class="license markdown-body"><blockquote><p>Unless otherwise noted, the content of this site is licensed under <a rel=license href=https://creativecommons.org/licenses/by/4.0/ target=_blank>CC BY</a>.</p></blockquote></div><div class=post-comment data-comment=utterances><span class=post-comment-notloaded><i class="iconfont icon-chatbox-ellipses-sharp"></i>&nbsp;Load comments</span>
+<script>function loadComment(){var e,n=document.querySelector(".post-comment"),t=document.body.getAttribute("data-theme");t==="auto"?t=window.matchMedia("(prefers-color-scheme: dark)").matches?"photon-dark":"github-light":t=t==="dark"?"photon-dark":"github-light",e=document.createElement("script"),e.src="https://utteranc.es/client.js",e.setAttribute("repo","robojumper/robojumper.github.io"),e.setAttribute("issue-term","pathname"),e.setAttribute("theme",t),e.setAttribute("crossorigin","anonymous"),e.setAttribute("async",""),document.querySelector(".post-comment").appendChild(e),document.querySelector("span.post-comment-notloaded").setAttribute("style","display: none;")}</script></div></div><aside class="col-12 col-md-3 float-left sidebar"><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#finding-the-function>Finding the function</a><ul><li><a href=#final-functions>Final functions</a></li><li><a href=#delegates>Delegates</a></li></ul></li><li><a href=#the-stack-frame>The Stack Frame</a></li><li><a href=#arguments>Arguments</a><ul><li><a href=#out-parameter-soundness>Out Parameter Soundness</a></li></ul></li><li><a href=#assorted-modifiers>Assorted Modifiers</a><ul><li><a href=#static>Static</a></li><li><a href=#singular>Singular</a></li><li><a href=#simulated>Simulated</a></li></ul></li><li><a href=#alternatively>Alternatively</a></li><li><a href=#closing-words>Closing words</a></li></ul></nav></div></aside></div><div class=btn><div class=btn-menu id=btn-menu><i class="iconfont icon-grid-sharp"></i></div><div class=btn-toggle-mode><i class="iconfont icon-contrast-sharp"></i></div><div class=btn-scroll-top><i class="iconfont icon-chevron-up-circle-sharp"></i></div></div><aside class=sidebar-mobile style=display:none><div class=sidebar-wrapper><div class="sidebar-item sidebar-pages"><h3>Pages</h3><ul><li><a href=/>Home</a></li><li><a href=/projects/>Projects</a></li><li><a href=/about/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div class="sidebar-item sidebar-links"><h3>Links</h3><ul><li><a href=https://github.com/robojumper target=_blank><span>GitHub</span></a></li><li><a href=https://twitter.com/robojumper_ target=_blank><span>Twitter</span></a></li></ul></div><div class="sidebar-item sidebar-tags"><h3>Tags</h3><div><span><a href=/tags/unrealscript/>unrealscript</a></span>
+<span><a href=/tags/xcom2/>xcom2</a></span></div></div><div class="sidebar-item sidebar-toc"><h3>Table of Contents</h3><nav id=TableOfContents><ul><li><a href=#finding-the-function>Finding the function</a><ul><li><a href=#final-functions>Final functions</a></li><li><a href=#delegates>Delegates</a></li></ul></li><li><a href=#the-stack-frame>The Stack Frame</a></li><li><a href=#arguments>Arguments</a><ul><li><a href=#out-parameter-soundness>Out Parameter Soundness</a></li></ul></li><li><a href=#assorted-modifiers>Assorted Modifiers</a><ul><li><a href=#static>Static</a></li><li><a href=#singular>Singular</a></li><li><a href=#simulated>Simulated</a></li></ul></li><li><a href=#alternatively>Alternatively</a></li><li><a href=#closing-words>Closing words</a></li></ul></nav></div></div></aside></main><footer><div class="container-lg clearfix"><div class="col-12 footer"><span>&copy; 2020-2023
+<a href=https://robojumper.github.io>robojumper</a>
+| <a href=https://github.com/robojumper/robojumper.github.io>Source code</a>
+| Powered by <a href=https://github.com/dsrkafuu/hugo-theme-fuji/ target=_blank>Fuji-v2</a> & <a href=https://gohugo.io/ target=_blank>Hugo</a></span></div></div></footer><script defer src=https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/components/prism-core.min.js></script>
+<script defer src=https://cdn.jsdelivr.net/npm/prismjs@1.23.0/plugins/autoloader/prism-autoloader.min.js></script>
+<script defer src=/assets/js/fuji.min.js></script></body></html>
